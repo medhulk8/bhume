@@ -1,6 +1,12 @@
 # BhuMe Take-Home — Project Knowledge Base
 
-> Read this before touching any code. Update at end of every session.
+> **MANDATORY PROTOCOL — every significant step (phase complete, scores, arch decision, Gemini sent):**
+> 1. Update "Current Status" below immediately — don't batch to session end
+> 2. Update "Next Session Priority" below
+> 3. Add entry to `sessions.md`
+> 4. Commit + push
+>
+> Session log → `sessions.md` only. Never put session entries in this file.
 
 ---
 

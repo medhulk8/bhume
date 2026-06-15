@@ -1,14 +1,13 @@
 # Session Log
 
 ### 2026-06-16 — Session 3
-- Created `src/evidence.py` (Phase 2 signal module, renamed from signal.py to avoid stdlib conflict)
-- Created `src/graph.py` (adjacency graph: shared vertices + Delaunay backstop)
-- Created `src/matching.py` (block-grow BFS + chamfer_block)
-- Created `src/drift_field.py` (RANSAC anchor purification, seam detection, GP drift field)
-- Created `src/phase3_drift.py` (Phase 3+4 orchestration — two-pass architecture)
-- Phase 3 complete. Key fix: block chamfer had higher P2SP (flatter merged DT) than greedy. Two-pass: block for anchors, greedy for corrections, GP fallback for uncertain.
-- Final Phase 3 scores: vadnerbhairav IoU 0.872 / Spearman +0.829; malatavadi IoU 0.678 (up from 0.030). Runtime: ~5 min/village.
-- CLAUDE.md and sessions.md restructured (session log moved out of CLAUDE.md).
+- Created `src/evidence.py`, `src/graph.py`, `src/matching.py`, `src/drift_field.py`, `src/phase3_drift.py`
+- Phase 3 complete (two-pass: block chamfer for anchors, greedy for corrections, GP fallback).
+- Scores: vadnerbhairav IoU 0.872 / Spearman +0.829; malatavadi IoU 0.678 (up from 0.030).
+- Created `src/calibrate.py` (Phase 6 synthetic calibration). Running on vadnerbhairav.
+- Gemini approved block anchors, 0.040 regression, and Phase 6 plan. Directive: synthetic shifts must sample from GP field, not uniform scatter.
+- CLAUDE.md update protocol strengthened: update after every significant step, not just session end.
+- sessions.md = log only; CLAUDE.md = living status (no session entries there).
 
 ### 2026-06-15 — Session 2
 - Installed uv (not on PATH initially). Ran `uv sync` in kit/. Added folium, scikit-learn, matplotlib, opencv-python-headless.
