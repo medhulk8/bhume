@@ -1,11 +1,21 @@
 # BhuMe — Cadastral Boundary Correction
 
-Intern take-home for BhuMe AI. Corrects drifted cadastral plot boundaries in Maharashtra using
-imagery evidence + spatially-coherent drift field.
+> Correcting century-old drifted land parcel boundaries in Maharashtra using imagery evidence and a spatially-coherent GP drift field.
 
 ---
 
-## How to run
+## Results
+
+| Village | IoU (public truths) | vs. Identity | Corrected | Flagged | Omitted | Synth AUC |
+|---|---|---|---|---|---|---|
+| **Vadnerbhairav** | **0.872** | +0.259 | 1,928 (79%) | 527 (21%) | 2 | 0.721 |
+| **Malatavadi** | **0.739** | +0.229 | 1,375 (55%) | 1,027 (41%) | 106 (4%) | 0.804 |
+
+Public calibration: all submitted corrections on the 9 public truths are accurate → AUC unmeasurable on this set. Real score is on the hidden test set.
+
+---
+
+## Quick start
 
 ```bash
 cd kit/
@@ -13,163 +23,152 @@ uv run python ../src/predict.py ../data/vadnerbhairav
 uv run python ../src/predict.py ../data/malatavadi
 ```
 
-Writes `<village_dir>/predictions.geojson`. Runtime: ~6 min/village on a laptop.
+Writes `<village_dir>/predictions.geojson`. Runtime ~6 min/village on a laptop.
 
 ---
 
-## Method
+## The problem
 
-### Core thesis
+Maharashtra cadastral sheets are century-old hand-drawn maps georeferenced with sparse control points. Plots drift off their real field boundaries by 5–30 m — but the drift is **spatially coherent**: neighbouring plots drift together because they were registered with the same control points.
 
-Century-old cadastral sheets were georeferenced with sparse control points. Drift is
-**spatially coherent** — not random per-plot. Estimating a smooth drift field, then applying
-it vertex-by-vertex, outperforms per-plot greedy correction on dense parcels and produces
-calibrated confidence.
+Per-plot greedy matching treats every parcel independently and fails on dense villages (Malatavadi IoU 0.030). The key insight is to estimate a **smooth drift field first**, then apply it vertex-by-vertex so the fabric never tears.
 
-### Architecture
+---
+
+## Architecture
 
 ```
-                 ┌─────────────────────────────────────────────┐
-                 │               PASS 1 (anchors)              │
- plots.geojson   │                                             │
- imagery.tif  ──►│  adjacency graph ──► block-grow ──► chamfer │
- boundaries.tif  │                                     │       │
-                 │                             RANSAC filter   │
-                 │                                     │       │
-                 │                        ┌────────────▼───┐   │
-                 │                        │ GP drift field │   │
-                 │                        │ (per-sheet     │   │
-                 │                        │  affine+GP)    │   │
-                 │                        └────────┬───────┘   │
-                 └─────────────────────────────────┼───────────┘
-                                                   │
-                 ┌─────────────────────────────────▼───────────┐
-                 │               PASS 2 (corrections)          │
-                 │                                             │
-                 │  greedy per-plot chamfer ──► agree_m check  │
-                 │                              │              │
-                 │                         if agree_m low:     │
-                 │                           use GP fallback   │
-                 └─────────────────────────────────────────────┘
-                                                   │
-                 ┌─────────────────────────────────▼───────────┐
-                 │          CALIBRATION (on-the-fly)           │
-                 │                                             │
-                 │  displacement-recovery synthetic set        │
-                 │  ──► LogisticRegression([agree_m, |log ar|])│
-                 │  ──► IsotonicRegression ──► P(IoU ≥ 0.5)   │
-                 └─────────────────────────────────────────────┘
-                                                   │
-                 ┌─────────────────────────────────▼───────────┐
-                 │                DECISION LAYER               │
-                 │                                             │
-                 │  shift < 5m      → OMIT   (restraint)      │
-                 │  area ratio ∉ [0.7,1.4] → FLAG             │
-                 │  no fix available → FLAG                    │
-                 │  else            → CORRECTED + confidence   │
-                 └─────────────────────────────────────────────┘
+ plots.geojson  ┌──────────────────────────────────────────────────┐
+ imagery.tif  ──►            PASS 1  ·  Anchor extraction           │
+ boundaries.tif │                                                    │
+                │  adjacency graph ──► block-grow ──► chamfer match  │
+                │                                     │              │
+                │                             RANSAC filter          │
+                │                             (purge bad anchors)    │
+                │                                     │              │
+                │                        ┌────────────▼───────────┐  │
+                │                        │   GP drift field       │  │
+                │                        │   per-sheet affine     │  │
+                │                        │   + GP on residuals    │  │
+                │                        └────────────┬───────────┘  │
+                └─────────────────────────────────────┼──────────────┘
+                                                      │
+                ┌─────────────────────────────────────▼──────────────┐
+                │            PASS 2  ·  Per-plot correction           │
+                │                                                     │
+                │  greedy chamfer per plot ──► agree_m = |Δ greedy-GP│
+                │                              low agree_m → corrected│
+                │                              high agree_m → GP used │
+                └─────────────────────────────────────────────────────┘
+                                                      │
+                ┌─────────────────────────────────────▼──────────────┐
+                │          CALIBRATION  ·  On-the-fly per village     │
+                │                                                     │
+                │  GMM on raw anchor shifts (not GP — avoids leakage) │
+                │  ──► displacement-recovery synthetic set            │
+                │  ──► LogisticRegression([agree_m, |log area_ratio|])│
+                │  ──► IsotonicRegression ──► P(IoU ≥ 0.5)           │
+                └─────────────────────────────────────────────────────┘
+                                                      │
+                ┌─────────────────────────────────────▼──────────────┐
+                │               DECISION LAYER                        │
+                │                                                     │
+                │  shift < 5 m            → OMIT   (restraint)       │
+                │  area ratio ∉ [0.7,1.4] → FLAG   (drawn ≠ records) │
+                │  no confident fix        → FLAG                     │
+                │  conf < 0.5             → FLAG   (decision theory)  │
+                │  else                   → CORRECTED + confidence    │
+                └─────────────────────────────────────────────────────┘
 ```
-
-### Key design choices (all with evidence)
-
-| Decision | Reasoning | Evidence |
-|---|---|---|
-| Two-pass (block anchors / greedy corrections) | Block chamfer inflates P2SP (merged DT = flatter peak) → can't use block result as per-plot correction | Vadnerbhairav IoU 0.744 single-pass → 0.872 two-pass |
-| agree_m as dominant confidence signal | Chamfer false peaks diverge from the GP field; true hits agree | LR weight −0.723 (vadnerbhairav) / −1.414 (malatavadi) learned from data |
-| P2SP dropped from confidence model | Measures peak sharpness, not correctness | LR weight ≈ 0 in 4-feature model → dropped |
-| gp_std dropped from confidence model | Wrong-sign multicollinearity artifact (+0.54) | Drop raised vadnerbhairav AUC 0.709→0.721 |
-| Vertex-level topology (fabric never tears) | Per-parcel rigid shift would leave gaps at shared boundaries | Locked in Phase 0 |
-| Omit shifts < 5m (not flagged) | Scorer CONTROL_SHIFT_M=5.0 — submitting near-zero "corrections" would hurt restraint and AUC | Phase 0 + contract |
-| GMM shift sampler (not GP) for calibration | Injecting from GP field → agree_m near-tautology → inflated AUC | Gemini-caught leakage: 0.813 (leaky) → 0.721 (honest) |
-| Confidence threshold 0.5 → flag | P(IoU≥0.5) < 0.5 = expected to be wrong = don't submit. Decision-theory optimal boundary, immune to overfit (derived from probability axioms not example truths) | Malatavadi IoU 0.678→0.739, wrong plot correctly flagged |
 
 ---
 
 ## Ablation ladder
 
-| Phase | Method | Vadnerbhairav IoU | Malatavadi IoU | Vadnerbhairav Spearman | Notes |
-|---|---|---|---|---|---|
-| Baseline | Identity | — | — | — | No movement |
-| Phase 1 | Median shift | 0.713 | 0.588 | — (flat) | Kit baseline |
-| Phase 1 | Greedy chamfer, global threshold | 0.824 | 0.014 | −0.116 | Global threshold harms |
-| Phase 1 | **Greedy chamfer, adaptive top-15%** | **0.912** | 0.030 | **+0.812** | Best per-plot solo |
-| Phase 3 (single-pass, broken) | Block chamfer → per-plot | 0.744 | — | — | Block inflates P2SP |
-| Phase 3 | **Two-pass: block anchors + greedy** | **0.872** | **0.678** | **+0.829** | Drift field unlocks malatavadi |
-| predict.py (final) | Phase 3 + calibration | 0.872 | **0.678** | +0.530* | *n=6 noisy |
+| Method | Vadnerbhairav IoU | Malatavadi IoU | Spearman (vad) | Notes |
+|---|---|---|---|---|
+| Identity (no movement) | — | — | — | Baseline |
+| Global median shift | 0.713 | 0.588 | flat | Kit baseline |
+| Greedy chamfer, global threshold | 0.824 | 0.014 | −0.116 | Threshold destroys malatavadi |
+| **Greedy chamfer, adaptive top-15%** | **0.912** | 0.030 | **+0.812** | Best per-plot solo |
+| Block chamfer → per-plot (single-pass) | 0.744 | — | — | Block inflates P2SP → broken |
+| **Two-pass: block anchors + greedy** | **0.872** | **0.678** | **+0.829** | GP field unlocks dense village |
+| Two-pass + calibration (final) | 0.872 | 0.739 | +0.530* | *n=6, noisy |
 
-Malatavadi IoU 0.030→0.678: the GP drift field is load-bearing for dense-parcel villages where
-single-plot chamfer has no spatial context.
-
----
-
-## Final predictions summary
-
-| Village | IoU (public truths) | Improvement | Corrected | Flagged | Omitted | Synth AUC |
-|---|---|---|---|---|---|---|
-| vadnerbhairav | 0.872 | +0.259 | 1928 (79%) | 527 (21%) | 2 | 0.721 |
-| malatavadi | 0.739 | +0.229 | 1375 (55%) | 1027 (41%) | 106 (4%) | 0.804 |
-
-Flag rate matches Phase 0 area census (~18-20% of plots outside area ratio band [0.7, 1.4]).
-Malatavadi 106 omits = plots where both greedy chamfer and GP field predict shift < 5m.
+Malatavadi 0.030 → 0.678: the GP drift field is load-bearing for dense-parcel villages where single-plot chamfer has no spatial context.
 
 ---
 
-## Confidence calibration (Phase 6)
+## Design decisions
 
-**Strategy**: synthetic ground truth, never tuning to the 9 example truths.
+Every decision has a before/after number or a principled derivation — nothing was tuned to the 9 example truths.
 
-1. Build drift field from Pass-1 block anchors.
-2. Fit GMM (BIC-selected k∈{1,2,3}) on raw anchor shift vectors — independent of the GP spatial field.
-3. For each synthetic plot: reference chamfer → displace by GMM shift → re-chamfer → measure IoU recovery.
-4. Features: `[agree_m, |log(area_ratio)|]` — learned weights via LogisticRegression (class_weight=balanced).
-5. IsotonicRegression enforces monotone calibration.
+| Decision | Why | Evidence |
+|---|---|---|
+| **Two-pass** (block anchors, greedy corrections) | Merged block DT has a flatter peak → P2SP inflated → can't use block result as per-plot correction | IoU 0.744 → 0.872 |
+| **agree_m as dominant confidence signal** | Chamfer false peaks diverge from the GP field; true peaks align | LR weight −0.723 vad / −1.414 mal, learned from synthetic data |
+| **Drop P2SP from calibration** | Measures peak sharpness, not correctness | LR weight ≈ 0 in 4-feature model |
+| **Drop gp_std from calibration** | Wrong-sign multicollinearity artifact (+0.54) | Drop raised AUC 0.709 → 0.721 |
+| **Vertex-level topology** (fabric never tears) | Per-parcel rigid shift leaves gaps at shared boundaries | Locked after Phase 0 topology audit |
+| **Omit shifts < 5 m** (not flagged) | scorer `CONTROL_SHIFT_M=5.0` — submitting near-zero corrections hurts restraint | Phase 0 + contract |
+| **GMM sampler for calibration** (not GP) | Injecting synthetic shifts from the GP field makes agree_m tautological | Gemini-caught leakage: AUC 0.813 (leaky) → 0.721 (honest) |
+| **Confidence threshold 0.5 → flag** | P(IoU≥0.5) < 0.5 = expected wrong = don't submit. Derived from probability axioms, not example truths | Malatavadi IoU 0.678 → 0.739; wrong plot correctly flagged |
 
-**Honest 5-fold cross-validated AUC** (never trained on the 9 example truths):
+---
 
-| Village | Synth cross-val AUC | Real Spearman | Samples |
+## Confidence calibration
+
+**Strategy**: build a synthetic test set inside the pipeline, never touching the 9 public truths.
+
+1. Fit GMM (BIC-selected k ∈ {1,2,3}) on raw anchor shift vectors — independent of the GP field.
+2. For each synthetic plot: take a reference chamfer result, displace by a GMM sample, re-chamfer, measure IoU recovery.
+3. Features: `[agree_m, |log(area_ratio)|]` — weights learned by `LogisticRegression(class_weight=balanced)`.
+4. `IsotonicRegression` enforces monotone calibration.
+5. Submitted confidence = P(IoU ≥ 0.5).
+
+**Honest 5-fold cross-validated AUC** (zero exposure to example truths):
+
+| Village | Cross-val AUC | Real Spearman | Samples |
 |---|---|---|---|
-| vadnerbhairav | **0.721** | +0.530 (n=6) | 298 (65% accurate) |
-| malatavadi | **0.804** | −0.866 (n=3) | 277 (57% accurate) |
+| Vadnerbhairav | **0.721** | +0.530 (n=6) | 298 (65% accurate) |
+| Malatavadi | **0.804** | −0.866 (n=3) | 277 (57% accurate) |
 
-Known risk: malatavadi synth AUC 0.804 vs real Spearman −0.866. With n=3 real truths, one
-data point can flip sign — statistically near-meaningless. Dense parcels likely have different
-failure modes (catastrophic snaps to neighbours) than the synthetic displacement-recovery test
-exercises. Cannot resolve with 3 points; flagged as limitation.
+Known limitation: malatavadi synth AUC 0.804 vs real Spearman −0.866. With n=3 truths, one data point can flip the sign — statistically near-meaningless. Dense parcels have failure modes (catastrophic snaps to a neighbour's boundary) that displacement-recovery synthetic tests do not exercise. Cannot resolve with 3 points; flagged as a known risk.
 
 ---
 
 ## Reliability diagrams
 
-![vadnerbhairav reliability](docs/reliability_vadnerbhairav.png)
-![malatavadi reliability](docs/reliability_malatavadi.png)
+| Vadnerbhairav | Malatavadi |
+|---|---|
+| ![vadnerbhairav](docs/reliability_vadnerbhairav.png) | ![malatavadi](docs/reliability_malatavadi.png) |
 
 ---
 
 ## Failure gallery
 
-Plots where the method fails or flags, with reasoning:
-
-| Category | Example | Why flagged/failed |
+| Category | Where | Why it fails or flags |
 |---|---|---|
-| Area mismatch | Vadnerbhairav plots with ar < 0.7 | Drawn area far from recorded → placement may be wrong, not just shifted |
-| Dense-parcel snap | Malatavadi small plots near boundaries | Greedy chamfer snaps to neighbouring plot's boundary; agree_m catches it |
-| Low evidence | Canopy-covered plots | Sobel + boundaries.tif both weak under forest cover → low DT signal |
-| Large blocks at seam | Block near sheet boundary | Anchor-discordance at seam → high gp_std → GP fallback or flag |
-| Tiny plots (< 400 m²) | Malatavadi pot-kharaba fragments | Sub-pixel; chamfer unreliable |
+| Area mismatch | Vadnerbhairav plots with ar < 0.7 | Drawn area far from records → placement wrong, not just shifted |
+| Dense-parcel snap | Malatavadi small plots near boundaries | Greedy chamfer locks onto neighbouring plot's boundary; agree_m catches the divergence |
+| Low evidence | Canopy-covered plots | Sobel + boundaries.tif both weak under forest cover → flat DT → low P2SP |
+| Sheet-seam blocks | Plots straddling two cadastral sheets | Anchor-discordance at seam → high gp_std → GP fallback or flag |
+| Sub-pixel plots | Malatavadi pot-kharaba fragments (< 400 m²) | Plot smaller than imagery resolution; chamfer unreliable |
 
 ---
 
 ## Output contract
 
-`predictions.geojson` — FeatureCollection EPSG:4326:
-- `plot_number`: string (exact match)
-- `status`: `"corrected"` | `"flagged"`
-- `confidence`: 0–1 (calibrated P(IoU ≥ 0.5); only for corrected)
-- `method_note`: source, shift vector, agree_m, area ratio
+`predictions.geojson` — FeatureCollection, EPSG:4326:
 
-Plots with shift < 5m are **omitted** (not flagged, not corrected). Omission = no penalty, no
-credit — equivalent to "not attempted". This protects restraint on control plots that are
-already close to their true position.
+| Field | Type | Meaning |
+|---|---|---|
+| `plot_number` | string | Exact match to input |
+| `status` | `"corrected"` \| `"flagged"` | Correction decision |
+| `confidence` | 0–1 | Calibrated P(IoU ≥ 0.5) — only on corrected |
+| `method_note` | string | Source, shift vector, agree_m, area ratio |
+
+Plots with shift < 5 m are **omitted** (no penalty, no credit). This protects restraint score on control plots that are already near their true position.
 
 ---
 
@@ -177,18 +176,12 @@ already close to their true position.
 
 | File | Role |
 |---|---|
-| `src/predict.py` | End-to-end pipeline: adjacency → Pass 1 → Pass 2 → calibration → decision |
-| `src/evidence.py` | Sobel + boundaries.tif evidence map, distance transform, chamfer score |
-| `src/graph.py` | Adjacency graph (shared vertices + Delaunay), area/perimeter UTM helpers |
-| `src/matching.py` | Chamfer matching (block + per-plot), block-grow evidence budget |
-| `src/drift_field.py` | RANSAC anchor filter, seam detection, per-sheet GP, vertex-level T(x,y) |
-| `src/calibrate.py` | Displacement-recovery synthetic set, LR+isotonic calibration model |
-| `docs/phase0_findings.md` | Phase 0 numbers that set all thresholds |
-| `docs/phase6_calibration.md` | Calibration method, AUC, feature analysis |
-
----
-
-## Interactive map
-
-`docs/phase0_map.html` — folium HTML showing all plots over imagery for both villages.
-Open in browser (no server needed).
+| [`src/predict.py`](src/predict.py) | End-to-end pipeline entry point |
+| [`src/evidence.py`](src/evidence.py) | Sobel + boundaries.tif evidence map → distance transform → chamfer score |
+| [`src/graph.py`](src/graph.py) | Adjacency graph (shared vertices + Delaunay), UTM area/perimeter helpers |
+| [`src/matching.py`](src/matching.py) | Chamfer matching (block + per-plot), block-grow with evidence budget |
+| [`src/drift_field.py`](src/drift_field.py) | RANSAC anchor filter, seam detection, per-sheet affine + GP, vertex-level T(x,y) |
+| [`src/calibrate.py`](src/calibrate.py) | GMM shift sampler, displacement-recovery synthetic set, LR + isotonic model |
+| [`docs/phase0_findings.md`](docs/phase0_findings.md) | Data forensics — drift vectors, area census, signal audit; sets all thresholds |
+| [`docs/phase6_calibration.md`](docs/phase6_calibration.md) | Calibration method detail, AUC analysis, feature weights |
+| [`docs/phase0_map.html`](docs/phase0_map.html) | Interactive folium map — all plots over imagery (open in browser, no server) |
