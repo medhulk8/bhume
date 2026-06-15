@@ -137,7 +137,7 @@ def _fit_shift_sampler(fields: list[DF.DriftField]):
 
 
 def build_calibration_set(village_name: str, fields: list[DF.DriftField],
-                           utm_crs: str, rng_seed: int = 42) -> list[dict]:
+                           utm_crs: str, rng_seed: int = 42, village=None) -> list[dict]:
     """Generate synthetic calibration samples with LEAKAGE-FREE shift injection.
 
     Injected shift sampled from a GMM over RAW anchor shifts (not GP_field(location)),
@@ -146,11 +146,15 @@ def build_calibration_set(village_name: str, fields: list[DF.DriftField],
     Key signal: chamfer-GP agreement. A correct chamfer recovers the injected shift;
     whether that agrees with the GP field at this location is then genuinely informative.
 
+    village: optional pre-loaded Village (so predict.py can pass an arbitrary dir,
+    not just a slug under DATA_ROOT).
+
     Returns list of dicts: {p2sp, gp_std, agree_m, shift_m, area_ratio, regime, iou, accurate}.
     """
     import rasterio
     rng = np.random.default_rng(rng_seed)
-    village = bio.load(DATA_ROOT / village_name)
+    if village is None:
+        village = bio.load(DATA_ROOT / village_name)
     plots = village.plots
     plots_u = plots.to_crs(utm_crs)
     areas_m2 = {pn: row.geometry.area for pn, row in plots_u.iterrows()
