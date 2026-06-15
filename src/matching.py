@@ -167,22 +167,31 @@ def chamfer_block(block_pns: list[str], plots_4326: gpd.GeoDataFrame,
     Uses the outer perimeter of the merged block.
     Returns dict with: dx_m, dy_m, p2sp_ratio, score, is_flagged, flag_reason.
     """
-    # Merge block geometry in imagery CRS
-    geoms_img = []
+    geoms_4326 = []
     for pn in block_pns:
         if pn not in plots_4326.index:
             continue
         geom_4326 = plots_4326.loc[pn, "geometry"]
         if geom_4326 is None or geom_4326.is_empty:
             continue
-        geoms_img.append(f_img(geom_4326))
+        geoms_4326.append(geom_4326)
 
-    if not geoms_img:
+    if not geoms_4326:
         return {"dx_m": 0, "dy_m": 0, "p2sp_ratio": 1.0,
                 "score": 0.0, "is_flagged": True, "flag_reason": "no valid geometries in block"}
 
-    merged_img = unary_union(geoms_img)
-    merged_4326 = f_4326(merged_img)
+    merged_4326 = unary_union(geoms_4326)
+    return chamfer_geom(merged_4326, imagery_src, boundaries_path, f_img, f_4326, img_crs)
+
+
+def chamfer_geom(geom_4326, imagery_src, boundaries_path, f_img, f_4326,
+                 img_crs: str) -> dict:
+    """Run chamfer matching on a single arbitrary geometry (EPSG:4326).
+
+    Same engine as chamfer_block but takes a raw geometry (used for synthetic
+    displacement-recovery in calibration). Returns same dict shape.
+    """
+    merged_img = f_img(geom_4326)
 
     pad_m = SEARCH_RADIUS_M + 10.0
     evidence, win_transform = build_evidence_patch(imagery_src, boundaries_path, merged_img, pad_m)
