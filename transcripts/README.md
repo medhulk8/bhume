@@ -24,4 +24,5 @@ Gemini was used as an adversarial critic throughout. Key decisions it shaped:
 | 3 | Block anchors + regression | Approved 0.040 IoU regression (Phase 1→Phase 3) as correct trade for generalization |
 | 4 | agree_m on GP-fallback | Confirmed epistemically valid: measures signal conflict, protects calibration from confidently-wrong predictions |
 
-Gemini share links: *(add share links from each Gemini conversation here)*
+Gemini share links:
+- Sessions 3–4 (main architectural review): https://gemini.google.com/share/fc6fe17ecfe9
