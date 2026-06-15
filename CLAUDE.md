@@ -14,11 +14,11 @@
 
 **predict.py complete — final predictions written for both villages.**
 Phases 0/1/3/6 done. predict.py = end-to-end pipeline (adjacency→Pass1→Pass2→calibration→decision).
-Two bugs fixed: (1) area ratio equatorial→UTM, (2) redundant physical cap in decision layer (was over-flagging small-plot villages).
-Vadnerbhairav: corrected=1942 (79%), flagged=513 (21%), omitted=2. IoU 0.872, synth AUC 0.721.
-Malatavadi: corrected=1970 (79%), flagged=432 (17%), omitted=106. IoU 0.678, synth AUC 0.804.
+Three bugs fixed: (1) area ratio equatorial→UTM, (2) redundant physical cap in decision layer, (3) GP-fallback plots using constant agree_m=28.0 → now use real |greedy-GP|.
+Vadnerbhairav: corrected=1942 (79%), flagged=513 (21%), omitted=2. IoU 0.872. 94 unique conf values.
+Malatavadi: corrected=1970 (79%), flagged=432 (17%), omitted=106. IoU 0.678, Spearman=1.000 AUC=1.000 on n=3.
 Flag rate ~18-21% matches Phase 0 area census. README.md written.
-OPEN RISK: malatavadi real-truth Spearman inverted at n=3 — statistically near-meaningless, noted in docs.
+OPEN RISK: small-n (3/6) public example truths — hidden set is what matters for AUC.
 
 Session log → `sessions.md`
 GitHub: https://github.com/medhulk8/bhume (private)

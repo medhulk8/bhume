@@ -3,8 +3,9 @@
 ### 2026-06-16 — Session 4
 - Area ratio bug fixed: was using `geom.area * 111320²` (equatorial metres, 6-12% error) → now accurate UTM area at all call sites in predict.py
 - Physical cap bug fixed: decision layer was re-checking block area > 10× median AFTER Pass 2. For malatavadi (median 872 m²), cap=8720 m² → block of 10 plots hits it. Over-flagged 1643/2075 plots. Fix: removed redundant post-hoc check (grow_block already enforces cap during Pass 1).
-- Final vadnerbhairav: corrected=1942 (79%), flagged=513 (21%), omitted=2. IoU 0.872 unchanged.
-- Final malatavadi: corrected=1970 (79%), flagged=432 (17%), omitted=106. IoU 0.678, AUC 0.500 on n=3.
+- agree_m fix: GP-fallback plots (81% of vadnerbhairav corrected) were assigned constant agree_m=28.0 → identical confidence=0.7308. Fix: compute agree_m=|greedy-GP| even for high-P2SP plots (greedy still informative as signal-conflict measure). 94/89 unique conf values now vs 30/5 before. Malatavadi 3-truth Spearman/AUC→1.000. Gemini confirmed epistemically valid.
+- Final vadnerbhairav: corrected=1942 (79%), flagged=513 (21%), omitted=2. IoU 0.872.
+- Final malatavadi: corrected=1970 (79%), flagged=432 (17%), omitted=106. IoU 0.678, Spearman=1.000 (n=3).
 - Both villages: flag rate matches Phase 0 area census (~18-21%). Pipeline generalized.
 - Written README.md with method diagram, ablation ladder, failure gallery, calibration summary, final scores.
 
