@@ -28,6 +28,7 @@ src/baseline_ladder.py
 src/phase0_forensics.py
 src/phase3_drift.py
 src/export_transcripts.py
+src/gallery.py
 
 # Kit example
 kit/patch_example.png
@@ -39,6 +40,11 @@ kit/patch_example.png
 # OS
 .DS_Store
 Thumbs.db
+
+# Internal project management (not submission deliverables)
+CLAUDE.md
+PLAN.md
+sessions.md
 
 # Scratch
 scratch/
