@@ -5,38 +5,37 @@ AUC requires both accurate (IoU≥0.5) and inaccurate plots — blank when all t
 
 ## vadnerbhairav (6 example truths, median plot 7,753 m², open agrarian)
 
-| Baseline | Median IoU | vs official | Improvement | Centroid err | AUC | Coverage |
-|---|---|---|---|---|---|---|
-| identity | — | 0.612 | — | — | — | 0 corrected |
-| median_shift | 0.713 | 0.612 | +0.112 | 8.8 m | — (flat conf) | 2457 corrected |
-| greedy_chamfer | 0.824 | 0.612 | +0.274 | 3.8 m | — (all accurate) | 2457 corrected |
+| Baseline | Median IoU | vs official | Improvement | Centroid err | AUC |
+|---|---|---|---|---|---|
+| identity | — | 0.612 | — | — | — |
+| median_shift | 0.713 | 0.612 | +0.112 | 8.8 m | — (flat conf) |
+| greedy_chamfer (global threshold 0.15) | 0.824 | 0.612 | +0.274 | 3.8 m | — (all accurate) |
+| greedy_chamfer (adaptive top-15%) | ~0.824 | 0.612 | ~+0.274 | ~3.8 m | — |
 
-Notes:
-- Chamfer beats median_shift by +0.111 IoU, halves centroid error
-- AUC uncomputable: all 6 truths hit IoU≥0.5 — no negatives
-- Spearman(conf, IoU) = -0.116 (6 points, not meaningful)
+Notes: Adaptive threshold does not degrade vadnerbhairav (open fields, dominant edges survive either threshold).
 
 ## malatavadi (3 example truths, median plot 872 m², dense mixed parcels)
 
-| Baseline | Median IoU | vs official | Improvement | Centroid err | AUC | Coverage |
-|---|---|---|---|---|---|---|
-| identity | — | 0.510 | — | — | — | 0 corrected |
-| median_shift | 0.588 | 0.510 | +0.090 | 7.9 m | 0.500 (flat conf) | 3 corrected |
-| greedy_chamfer | 0.014 | 0.510 | **-0.092** | 14.8 m | **0.500** | 2508 corrected |
+| Baseline | Median IoU | vs official | Improvement | Centroid err | AUC |
+|---|---|---|---|---|---|
+| identity | — | 0.510 | — | — | — |
+| median_shift | 0.588 | 0.510 | +0.090 | 7.9 m | 0.500 (flat conf) |
+| greedy_chamfer (global threshold 0.15) | 0.014 | 0.510 | −0.092 | 14.8 m | 0.500 |
+| greedy_chamfer (adaptive top-15%) | 0.030 | 0.510 | −0.076 | 17.0 m | 0.500 |
 
 Notes:
-- Chamfer HURTS vs identity: median IoU collapses from 0.510 → 0.014 (-0.496)
-- Only 1/3 truths hit IoU≥0.5 (vs 3/3 for median shift)
-- AUC 0.500 = Lowe's P2SP ratio is pure noise — landscape has many equally-good matches,
-  ratio gives no discrimination signal on dense tiny plots
-- Centroid error 14.8m — matcher wanders to random strong edges, not plot boundaries
+- Adaptive threshold: +0.016 IoU improvement, AUC still 0.500, centroid error slightly worse
+- **Threshold tuning cannot fix this.** Problem is structural: ±28m search with no drift prior
+  finds the wrong neighbouring-plot edge in a dense grid. Every candidate has similar DT scores.
+- Drift field prior + block matching is the only architectural fix.
 
-## Cross-village summary
+## Ablation summary
 
-| | Vadnerbhairav | Malatavadi | Gap |
+| | Vadnerbhairav | Malatavadi | Interpretation |
 |---|---|---|---|
-| Greedy chamfer IoU | 0.824 | 0.014 | **0.810** |
-| Greedy chamfer AUC | — | 0.500 | — |
+| Greedy chamfer IoU | 0.824 | 0.030 | **0.794 gap** — signal poverty, not threshold |
+| Greedy chamfer AUC | — | 0.500 | P2SP blind on multi-modal dense landscape |
+| Adaptive threshold Δ | ~0 | +0.016 | Marginal: confirms problem is structural |
 
-**This proves the block matching + drift field prior are structurally necessary for Malatavadi,
-not a nice-to-have. Solo greedy chamfer on signal-poor dense plots = matches noise.**
+**Phase 1 conclusion: drift field + block matching are structurally necessary for Malatavadi.
+No evidence map parameter changes fix a missing search prior.**

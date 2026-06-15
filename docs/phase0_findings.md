@@ -153,6 +153,16 @@ Trimmed-mean on evidence rejected: outline must land exactly on 1–2 pixel edge
 
 Out-of-bounds handling: pixels shifted outside patch → assigned `dt.max()` penalty (conservative, no signal available there).
 
+**DT edge binarisation:** Per-patch adaptive threshold — top 15% strongest pixels become edges.
+```python
+threshold = np.percentile(evidence, 85)   # per-patch, not global
+edges = (evidence >= threshold)
+```
+Global absolute threshold rejected: on signal-poor Malatavadi patches, >60% of pixels exceed
+0.15×patch_max (noise floods DT → flat landscape → AUC 0.500). Top-15% percentile keeps
+consistent edge density regardless of patch signal strength.
+Tested: Malatavadi 0.014→0.030 IoU (marginal; confirms problem is structural not threshold).
+
 **Corrections absorbed from whiteboard review:**
 - Rejected: linear weighted sum (0.3 × boundaries_norm) — suppresses high-confidence hits
 - Rejected: regime weights on pixel evidence — double-penalises large plots with naturally lower Sobel

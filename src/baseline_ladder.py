@@ -112,18 +112,18 @@ def build_evidence_raster(imagery_src, boundaries_path: Path | None,
     return evidence.astype(np.float32), win_transform, img_crs
 
 
-def build_distance_transform(evidence: np.ndarray, edge_threshold: float = 0.15) -> np.ndarray:
+def build_distance_transform(evidence: np.ndarray, edge_top_pct: float = 0.15) -> np.ndarray:
     """Compute distance transform of the evidence raster.
 
-    Binarises evidence at edge_threshold → inverts → distance transform.
-    Result: per-pixel distance (in pixels) to nearest detected edge.
-    Lower DT value = closer to an edge = better chamfer score.
-    Computed ONCE per patch; all candidate shifts sample from this single DT.
+    Per-patch adaptive thresholding: keep the top `edge_top_pct` fraction of pixels
+    by evidence strength as edges. This keeps a consistent edge density regardless of
+    whether the patch has strong open-field bunds (Vadnerbhairav) or weak dense-plot
+    edges (Malatavadi) — a global absolute threshold floods weak patches with noise.
     """
-    edges = (evidence >= edge_threshold).astype(np.uint8)
-    # DT needs the background (non-edge) pixels to get distance to nearest edge
+    threshold = float(np.percentile(evidence, 100.0 * (1.0 - edge_top_pct)))
+    edges = (evidence >= threshold).astype(np.uint8)
     not_edges = 1 - edges
-    dt = cv2.distanceTransform(not_edges, cv2.DIST_L2, 5)  # O(N), exact L2
+    dt = cv2.distanceTransform(not_edges, cv2.DIST_L2, 5)
     return dt.astype(np.float32)
 
 
