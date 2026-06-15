@@ -154,7 +154,7 @@ def predict(village_dir: str) -> gpd.GeoDataFrame:
 
         geom_u = plots_u.loc[pn, "geometry"]
         cx_m, cy_m = geom_u.centroid.x, geom_u.centroid.y
-        ar = float(np.clip(C._area_ratio(plots.loc[pn]), 0.3, 3.0))
+        ar = float(np.clip(C._area_ratio(plots.loc[pn], drawn_area_m2=areas_m2.get(pn)), 0.3, 3.0))
 
         g = greedy.get(pn)
         gp_dx, gp_dy, gp_std = (0.0, 0.0, GP_RESCUE_MAX_STD)

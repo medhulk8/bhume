@@ -71,7 +71,12 @@ def _translate(geom_4326, dx_m, dy_m, utm_crs):
     return shp_transform(_tr, geom_4326)
 
 
-def _area_ratio(plot_row) -> float:
+def _area_ratio(plot_row, drawn_area_m2: float | None = None) -> float:
+    """drawn / (recorded_cultivable + pot_kharaba). ratio≈1 → area matches records.
+
+    drawn_area_m2: accurate UTM area (pass this). Falls back to a crude degree→m²
+    approximation only if not provided (wrong by ~cos(lat); avoid for decisions).
+    """
     def _safe(v):
         try:
             f = float(v)
@@ -86,7 +91,8 @@ def _area_ratio(plot_row) -> float:
     geom = plot_row["geometry"]
     if geom is None or geom.is_empty:
         return 1.0
-    drawn = geom.area * (111320 ** 2)  # rough m² from degrees (for ratio only)
+    drawn = drawn_area_m2 if (drawn_area_m2 is not None and drawn_area_m2 > 0) \
+        else geom.area * (111320 ** 2)
     ratio = drawn / denominator
     return ratio if np.isfinite(ratio) else 1.0
 
@@ -235,7 +241,7 @@ def build_calibration_set(village_name: str, fields: list[DF.DriftField],
         disp_4326 = _translate(L_4326, inj_dx, inj_dy, utm_crs)  # move L away by d
 
         plot_row = plots.loc[pn]
-        ar = _area_ratio(plot_row)
+        ar = _area_ratio(plot_row, drawn_area_m2=areas_m2.get(pn))
 
         # Step 3: chamfer on displaced plot — does it recover back to L?
         rec = M.chamfer_geom(disp_4326, img_src, village.boundaries_path, f_img, f_4326, img_crs)
@@ -345,11 +351,14 @@ def recalibrate_predictions(village_name: str, model: CalibrationModel) -> gpd.G
     pred_path = DATA_ROOT / village_name / "predictions_phase3.geojson"
     gdf = gpd.read_file(pred_path)
 
-    # area_ratio per plot from original village data
+    # area_ratio per plot from original village data (accurate UTM area)
     village = bio.load(DATA_ROOT / village_name)
+    utm = _utm_crs(village)
+    plots_u = village.plots.to_crs(utm)
     ar_by_pn = {}
     for pn, row in village.plots.iterrows():
-        ar_by_pn[str(pn)] = float(np.clip(_area_ratio(row), 0.3, 3.0))
+        a_m2 = plots_u.loc[pn, "geometry"].area if pn in plots_u.index else None
+        ar_by_pn[str(pn)] = float(np.clip(_area_ratio(row, drawn_area_m2=a_m2), 0.3, 3.0))
 
     def _recalibrate_row(row):
         if row["status"] != "corrected":
