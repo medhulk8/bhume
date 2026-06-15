@@ -167,7 +167,14 @@ def predict(village_dir: str) -> gpd.GeoDataFrame:
         elif fields and gp_std <= GP_RESCUE_MAX_STD:
             dx_m, dy_m = gp_dx, gp_dy
             p2sp = 1.0
-            agree_m = GP_FALLBACK_AGREE_M  # no independent chamfer agreement → conservative
+            # Use greedy shift for agree_m even if P2SP was too high to trust for correction.
+            # agree_m = |greedy - GP| is still informative: low = both agree → confident;
+            # high = greedy found a false peak. Fall back to conservative constant only if
+            # greedy itself failed (is_flagged).
+            if g is not None and not g["is_flagged"]:
+                agree_m = float(np.sqrt((g["dx_m"] - gp_dx)**2 + (g["dy_m"] - gp_dy)**2))
+            else:
+                agree_m = GP_FALLBACK_AGREE_M
             src = "gp"
         else:
             # No trustworthy correction → flag
