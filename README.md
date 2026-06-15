@@ -177,18 +177,13 @@ already close to their true position.
 
 | File | Role |
 |---|---|
+| `src/predict.py` | End-to-end pipeline: adjacency → Pass 1 → Pass 2 → calibration → decision |
 | `src/evidence.py` | Sobel + boundaries.tif evidence map, distance transform, chamfer score |
 | `src/graph.py` | Adjacency graph (shared vertices + Delaunay), area/perimeter UTM helpers |
 | `src/matching.py` | Chamfer matching (block + per-plot), block-grow evidence budget |
 | `src/drift_field.py` | RANSAC anchor filter, seam detection, per-sheet GP, vertex-level T(x,y) |
 | `src/calibrate.py` | Displacement-recovery synthetic set, LR+isotonic calibration model |
-| `src/predict.py` | End-to-end pipeline: adjacency → Pass 1 → Pass 2 → calibration → decision |
-| `src/phase0_forensics.py` | Data forensics: drift vectors, area census, signal audit, blockiness |
-| `src/baseline_ladder.py` | Phase 1 greedy chamfer baselines |
-| `src/phase3_drift.py` | Phase 3 development entry point (two-pass) |
 | `docs/phase0_findings.md` | Phase 0 numbers that set all thresholds |
-| `docs/baseline_scores.md` | Phase 1 ablation table |
-| `docs/phase3_scores.md` | Phase 3 scores vs Phase 1 |
 | `docs/phase6_calibration.md` | Calibration method, AUC, feature analysis |
 
 ---

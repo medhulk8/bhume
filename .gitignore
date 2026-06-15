@@ -8,7 +8,29 @@ __pycache__/
 # Kit venv (managed by uv)
 kit/.venv/
 
-# Outputs (generated — predictions.geojson committed as submission deliverable)
+# Intermediate predictions (only predictions.geojson is the deliverable)
+data/*/predictions_calibrated.geojson
+data/*/predictions_phase3.geojson
+data/*/predictions_greedy_chamfer.geojson
+data/*/predictions_identity.geojson
+data/*/predictions_median_shift.geojson
+
+# Generated artifacts
+docs/calibration_*.pkl
+docs/baseline_scores.md
+docs/phase3_scores.md
+docs/phase0_plots/blockiness_*.png
+docs/phase0_plots/signal_audit.png
+docs/screenshots/
+
+# Dev/utility scripts (not part of submission pipeline)
+src/baseline_ladder.py
+src/phase0_forensics.py
+src/phase3_drift.py
+src/export_transcripts.py
+
+# Kit example
+kit/patch_example.png
 
 # Jupyter
 .ipynb_checkpoints/
