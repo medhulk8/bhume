@@ -72,8 +72,14 @@ def _translate(geom_4326, dx_m, dy_m, utm_crs):
 
 
 def _area_ratio(plot_row) -> float:
-    recorded = float(plot_row.get("recorded_area_sqm", 0) or 0)
-    pot_kharaba = float(plot_row.get("pot_kharaba_sqm", 0) or 0)
+    def _safe(v):
+        try:
+            f = float(v)
+            return f if np.isfinite(f) else 0.0
+        except (TypeError, ValueError):
+            return 0.0
+    recorded = _safe(plot_row.get("recorded_area_sqm", 0))
+    pot_kharaba = _safe(plot_row.get("pot_kharaba_sqm", 0))
     denominator = recorded + pot_kharaba
     if denominator < 1.0:
         return 1.0
@@ -81,7 +87,8 @@ def _area_ratio(plot_row) -> float:
     if geom is None or geom.is_empty:
         return 1.0
     drawn = geom.area * (111320 ** 2)  # rough m² from degrees (for ratio only)
-    return drawn / denominator
+    ratio = drawn / denominator
+    return ratio if np.isfinite(ratio) else 1.0
 
 
 def _classify_regime(area_m2: float) -> str:
@@ -271,7 +278,12 @@ def _feature_vector(p2sp: float, agree_m: float, gp_std: float, area_ratio: floa
     abs(log(area_ratio)) is monotone: 0 at ratio=1 (good), larger = worse (either direction).
     LR learns the sign/magnitude of every weight from the synthetic labels.
     """
-    ar = max(area_ratio, 1e-3)
+    def _fin(v, default):
+        return float(v) if (v is not None and np.isfinite(v)) else default
+    p2sp = _fin(p2sp, 1.0)
+    agree_m = _fin(agree_m, 28.0)
+    gp_std = _fin(gp_std, 5.0)
+    ar = max(_fin(area_ratio, 1.0), 1e-3)
     return [p2sp, agree_m, gp_std, abs(float(np.log(ar)))]
 
 

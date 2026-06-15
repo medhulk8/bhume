@@ -12,9 +12,10 @@
 
 ## Current Status
 
-**Phase 6 calibration — COMPLETE. Phase 5 decision layer + final predict.py next.**
-Phase 0/1/3/6 complete. Phase 3: vadnerbhairav IoU 0.872 / Spearman +0.829; malatavadi IoU 0.678.
-Phase 6 (`docs/phase6_calibration.md`): chamfer-GP agreement signal fixed AUC. Synthetic AUC vadnerbhairav 0.813, malatavadi 0.730 (P2SP-only was 0.490). Confidence = isotonic(0.40·(1-P2SP) + 0.45·(1-agree/28m) + 0.15·(1-GPstd/5m)). Calibrated predictions written for both villages.
+**Phase 6 calibration — rerunning with leakage-free design. Phase 5 + predict.py next.**
+Phase 0/1/3 complete. Phase 3: vadnerbhairav IoU 0.872 / Spearman +0.829; malatavadi IoU 0.678.
+Phase 6 (`docs/phase6_calibration.md`): Gemini caught data leakage (truth=GP, agree_m=|chamfer-GP|). Fixed: inject shifts from GMM on raw anchor shifts + displacement-recovery test. Weights now LEARNED via LogisticRegression → isotonic (not hand-set).
+Vadnerbhairav honest cross-val AUC 0.709 (was inflated 0.813). LR weights: agree_m −0.73 (dominant), area_ratio −0.585 (2nd), gp_std +0.06, P2SP −0.04 (near worthless — empirically confirms sharpness≠correctness). Malatavadi rerunning.
 
 Session log → `sessions.md`
 GitHub: https://github.com/medhulk8/bhume (private)
