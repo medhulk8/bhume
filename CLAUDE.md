@@ -12,10 +12,10 @@
 
 ## Current Status
 
-**Phase 6 calibration — COMPLETE (leakage-free, learned weights). Phase 5 + predict.py next.**
+**Phase 6 calibration — COMPLETE (final 2-feature model). Phase 5 + predict.py next.**
 Phase 0/1/3/6 done. Phase 3: vadnerbhairav IoU 0.872; malatavadi IoU 0.678.
-Phase 6 (`docs/phase6_calibration.md`): honest cross-val AUC vadnerbhairav 0.709, malatavadi 0.814. LR-learned weights: agree_m dominant (−0.73 / −1.52), area_ratio (−0.585 / −0.08), P2SP near-zero (confirms sharpness≠correctness).
-OPEN RISK: malatavadi synth AUC 0.814 but real-truth AUC 0.250 (n=3, inverted Spearman). gp_std weight +0.54 wrong sign on malatavadi. Both flagged in doc.
+Phase 6 (`docs/phase6_calibration.md`): FINAL 2-feature LR→isotonic on [agree_m, abs_log_area_ratio]. Honest cross-val AUC vadnerbhairav 0.721, malatavadi 0.804. Dropped gp_std (wrong sign) + p2sp (≈0 weight) per Gemini — AUC stable/up. agree_m dominant (−0.72 / −1.41).
+OPEN RISK (flagged in doc): malatavadi real-truth AUC inverted (n=3, statistically meaningless — trust 277-sample cross-val per Gemini).
 
 Session log → `sessions.md`
 GitHub: https://github.com/medhulk8/bhume (private)

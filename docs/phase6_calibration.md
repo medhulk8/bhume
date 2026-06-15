@@ -14,40 +14,43 @@ Synthetic displacement-recovery → LogisticRegression → IsotonicRegression �
    - Reference chamfer on plot as-is → image-derived truth landing `L`.
    - Displace `L` by GMM-sampled shift `d` → `disp`.
    - Re-chamfer `disp`; corrected = disp + recovery shift. Accurate iff IoU(corrected, L) ≥ 0.5.
-5. **Features** (raw, NOT hand-weighted): `[p2sp, agree_m, gp_std, |log(area_ratio)|]`.
+5. **Features** (raw, NOT hand-weighted): `[agree_m, |log(area_ratio)|]`.
    `agree_m = |net_shift − GP_field(loc)|`. No leakage: net_shift = injection (GMM) +
    image-driven recovery; GP only enters as the comparison reference.
+   gp_std and p2sp DROPPED: gp_std had a wrong-sign multicollinearity artifact (+0.54,
+   coupled with agree_m); p2sp weight ≈0 (measures sharpness not correctness). Dropping
+   both raised vadnerbhairav AUC (0.709→0.721) and left malatavadi flat (0.814→0.804).
 6. **LogisticRegression** (class_weight=balanced) learns weights → 1D probability.
 7. **IsotonicRegression** on the LR probability enforces monotone calibration.
 
-## Honest AUC (5-fold cross-validated, no train-on-test)
+## Honest AUC (5-fold cross-validated, no train-on-test) — FINAL 2-feature model
 
 | Village | Cross-val AUC | Train-fit AUC | Synth samples (accurate) |
 |---|---|---|---|
-| vadnerbhairav | **0.709** | 0.743 | 298 (194 = 65%) |
-| malatavadi | **0.814** | 0.835 | 277 (157 = 57%) |
+| vadnerbhairav | **0.721** | 0.744 | 298 (194 = 65%) |
+| malatavadi | **0.804** | 0.815 | 277 (157 = 57%) |
 
-(Leaky earlier version reported 0.813 / 0.730 — discard those.)
+(4-feature version: 0.709 / 0.814. Leaky version: 0.813 / 0.730 — both discarded.)
 
-## Learned weights (standardized) — the empirical payoff
+## Learned weights (standardized) — FINAL 2-feature model
 
 | Feature | Vadnerbhairav | Malatavadi |
 |---|---|---|
-| agree_m | **−0.730** | **−1.522** |
-| abs_log_area_ratio | −0.585 | −0.081 |
-| gp_std | +0.064 | +0.543 ⚠ |
-| p2sp | −0.043 | +0.018 |
+| agree_m | **−0.723** | **−1.414** |
+| abs_log_area_ratio | −0.577 | −0.086 |
 
 **Findings:**
-- **agree_m (chamfer-GP agreement) is the dominant signal in both villages** — and the
-  LR learned it, we didn't hand-set it. In malatavadi it's a razor (−1.52): the dense
-  grid produces many false peaks that strongly disagree with the GP field.
-- **P2SP is near-worthless once agreement is present** (|w| ≤ 0.04). Empirically confirms
-  the Phase-1 diagnosis: P2SP measures peak sharpness, not correctness.
-- **area_ratio matters in vadnerbhairav (−0.585), not malatavadi (−0.08)** — large open
+- **agree_m (chamfer-GP agreement) is the dominant signal in both villages** — LR learned
+  it, we didn't hand-set it. In malatavadi it's a razor (−1.41): the dense grid produces
+  catastrophic failures (snap to neighbor's plot) that disagree sharply with the GP field.
+- **P2SP dropped — empirically near-worthless** (weight ≈0 in 4-feature run). Confirms the
+  Phase-1 diagnosis: P2SP measures peak sharpness, not correctness.
+- **gp_std dropped** — wrong-sign (+0.54) multicollinearity artifact with agree_m; would
+  reward high-uncertainty guesses on unseen villages.
+- **area_ratio matters in vadnerbhairav (−0.577), not malatavadi (−0.086)** — large open
   fields with bad area ratios are unreliable; dense parcels already near 1.0.
-- **gp_std weight is +0.54 in malatavadi (wrong sign)** — flagged risk; likely collinearity
-  with agree_m. Small vs agree_m magnitude but worth watching.
+- Dropping the two dead features RAISED vadnerbhairav AUC (0.709→0.721) and left malatavadi
+  flat (0.814→0.804) — confirming they were noise/artifact, not signal.
 
 ## Open risk — synthetic vs real disagreement (malatavadi)
 
