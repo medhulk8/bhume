@@ -6,10 +6,9 @@
 
 ## Current Status
 
-**Phase 3 — in progress (block-grow + GP drift field).**
+**Phase 3 — COMPLETE. Phase 5 (decide.py) + Phase 6 (calibrate.py) next.**
 Phase 0 complete (`docs/phase0_findings.md`). Phase 1 complete (`docs/baseline_scores.md`).
-Phase 3 first run: vadnerbhairav 144s, 132 anchors, 1 sheet, 2302 corrected/155 flagged.
-Scores pending (scoring fix in progress). Malatavadi Phase 3 not yet run.
+Phase 3 scores (`docs/phase3_scores.md`): vadnerbhairav IoU 0.872 / Spearman +0.829; malatavadi IoU 0.678 (+0.648 vs Phase 1 0.030). Two-pass: block chamfer anchors + greedy per-plot correction + GP fallback.
 
 Session log → `sessions.md`
 GitHub: https://github.com/medhulk8/bhume (private)
@@ -20,12 +19,13 @@ GitHub: https://github.com/medhulk8/bhume (private)
 
 ```bash
 cd /Users/medhul/Desktop/projects/bhume/kit
-uv run python ../src/phase3_drift.py both   # run Phase 3 on both villages, get scores
+uv run python ../src/phase5_decide.py both     # Phase 5: leave-alone + flag conditions
+uv run python ../src/phase6_calibrate.py both  # Phase 6: synthetic calibration → isotonic
 ```
-Then:
-1. Run Phase 3 on malatavadi — verify drift field helps (target: IoU > 0.4)
-2. Build Phase 5 decision layer (`src/decide.py`): leave-alone threshold, flag conditions
-3. Build Phase 6 confidence calibration (`src/calibrate.py`): synthetic shift injection + isotonic regression
+Key next steps:
+1. Phase 5 `src/phase5_decide.py`: leave-alone threshold (<5m shift), flag conditions (area ratio, tiny plots)
+2. Phase 6 `src/phase6_calibrate.py`: inject synthetic shifts → isotonic regression on P2SP/GP-std → P(IoU>0.5)
+3. Final `predict.py <village_dir>` wrapper for submission
 
 ---
 
