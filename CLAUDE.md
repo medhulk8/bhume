@@ -12,10 +12,10 @@
 
 ## Current Status
 
-**Phase 6 calibration — rerunning with leakage-free design. Phase 5 + predict.py next.**
-Phase 0/1/3 complete. Phase 3: vadnerbhairav IoU 0.872 / Spearman +0.829; malatavadi IoU 0.678.
-Phase 6 (`docs/phase6_calibration.md`): Gemini caught data leakage (truth=GP, agree_m=|chamfer-GP|). Fixed: inject shifts from GMM on raw anchor shifts + displacement-recovery test. Weights now LEARNED via LogisticRegression → isotonic (not hand-set).
-Vadnerbhairav honest cross-val AUC 0.709 (was inflated 0.813). LR weights: agree_m −0.73 (dominant), area_ratio −0.585 (2nd), gp_std +0.06, P2SP −0.04 (near worthless — empirically confirms sharpness≠correctness). Malatavadi rerunning.
+**Phase 6 calibration — COMPLETE (leakage-free, learned weights). Phase 5 + predict.py next.**
+Phase 0/1/3/6 done. Phase 3: vadnerbhairav IoU 0.872; malatavadi IoU 0.678.
+Phase 6 (`docs/phase6_calibration.md`): honest cross-val AUC vadnerbhairav 0.709, malatavadi 0.814. LR-learned weights: agree_m dominant (−0.73 / −1.52), area_ratio (−0.585 / −0.08), P2SP near-zero (confirms sharpness≠correctness).
+OPEN RISK: malatavadi synth AUC 0.814 but real-truth AUC 0.250 (n=3, inverted Spearman). gp_std weight +0.54 wrong sign on malatavadi. Both flagged in doc.
 
 Session log → `sessions.md`
 GitHub: https://github.com/medhulk8/bhume (private)

@@ -10,7 +10,11 @@
 - sessions.md = log only; CLAUDE.md = living status (no session entries there).
 - Phase 6 first run: AUC 0.490 (P2SP alone fails — predicts sharpness not correctness). Diagnosed: false chamfer peaks have low P2SP but wrong location.
 - Fix: added chamfer-GP agreement signal (agree_m). AUC 0.490 → 0.813 on vadnerbhairav. Spearman on 6 truths 0.765.
-- Phase 6 complete both villages: synth AUC vadnerbhairav 0.813, malatavadi 0.730. Calibrated predictions written. Doc: docs/phase6_calibration.md.
+- Phase 6 v1 (leaky): synth AUC vadnerbhairav 0.813, malatavadi 0.730. DISCARDED.
+- Gemini caught data leakage: injected truth = GP_field, agree_m = |chamfer-GP| → tautology. Also found my displacement bug (no displacement → near-random labels).
+- Phase 6 v2 (leakage-free): inject from GMM on raw anchor shifts + displacement-recovery + LogisticRegression→isotonic (learned weights, not hand-set).
+- Honest cross-val AUC: vadnerbhairav 0.709, malatavadi 0.814. agree_m dominant (LR proved it). P2SP near-worthless (-0.04).
+- OPEN RISK flagged: malatavadi synth 0.814 vs real-truth AUC 0.250 (n=3 inverted). gp_std +0.54 wrong sign on malatavadi.
 
 ### 2026-06-15 — Session 2
 - Installed uv (not on PATH initially). Ran `uv sync` in kit/. Added folium, scikit-learn, matplotlib, opencv-python-headless.
