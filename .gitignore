@@ -1,0 +1,24 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+*.egg-info/
+
+# Kit venv (managed by uv)
+kit/.venv/
+
+# Outputs (generated — commit when ready)
+data/*/predictions.geojson
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Scratch
+scratch/
+*.log
