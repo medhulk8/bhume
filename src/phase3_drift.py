@@ -295,5 +295,49 @@ def _write_scores_md(scores: dict, targets: list):
     print(f"\nScores written to {out}")
 
 
+def _rebuild_field(village_name: str, utm_crs: str) -> list:
+    """Rebuild drift field (Pass 1 only) for calibration use. Returns list[DriftField]."""
+    import rasterio
+    village = bio.load(DATA_ROOT / village_name)
+    plots = village.plots
+    plots_u = plots.to_crs(utm_crs)
+    areas_m2 = G.plot_areas_utm(plots, utm_crs)
+    all_areas = [v for v in areas_m2.values() if v > 0]
+    median_area = float(np.median(all_areas)) if all_areas else 5000.0
+
+    img_src = rasterio.open(village.imagery_path)
+    img_crs = img_src.crs.to_string()
+    to_img = Transformer.from_crs("EPSG:4326", img_crs, always_xy=True)
+    to_4326_t = Transformer.from_crs(img_crs, "EPSG:4326", always_xy=True)
+    def f_img(g): return shp_transform(lambda xs, ys, z=None: to_img.transform(xs, ys), g)
+    def f_4326(g): return shp_transform(lambda xs, ys, z=None: to_4326_t.transform(xs, ys), g)
+
+    adj = G.build_adjacency(plots, utm_crs)
+    pns_sorted = sorted(plots.index.tolist(), key=lambda pn: areas_m2.get(pn, 0), reverse=True)
+    already_assigned: set[str] = set()
+    anchors: list[DF.Anchor] = []
+
+    for seed_pn in pns_sorted:
+        if seed_pn in already_assigned:
+            continue
+        block = M.grow_block(seed_pn, adj, plots, plots_u, img_src, village.boundaries_path,
+                              f_img, median_area, already_assigned)
+        result = M.chamfer_block(block, plots, img_src, village.boundaries_path, f_img, f_4326, img_crs)
+        for pn in block:
+            already_assigned.add(pn)
+        if not result["is_flagged"] and result["p2sp_ratio"] < 0.85:
+            merged_u = unary_union([plots_u.loc[pn, "geometry"]
+                                    for pn in block if pn in plots_u.index])
+            if merged_u and not merged_u.is_empty:
+                conf = float(np.clip(1.0 - result["p2sp_ratio"], 0.0, 1.0))
+                anchors.append(DF.Anchor(
+                    plot_number=seed_pn, cx_m=merged_u.centroid.x, cy_m=merged_u.centroid.y,
+                    dx_m=result["dx_m"], dy_m=result["dy_m"], confidence=conf
+                ))
+
+    img_src.close()
+    return DF.build_drift_field(anchors, utm_crs, detect_sheet_seams=True)
+
+
 if __name__ == "__main__":
     main()
