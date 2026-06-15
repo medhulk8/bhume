@@ -184,4 +184,5 @@ Plots with shift < 5 m are **omitted** (no penalty, no credit). This protects re
 | [`src/calibrate.py`](src/calibrate.py) | GMM shift sampler, displacement-recovery synthetic set, LR + isotonic model |
 | [`docs/phase0_findings.md`](docs/phase0_findings.md) | Data forensics — drift vectors, area census, signal audit; sets all thresholds |
 | [`docs/phase6_calibration.md`](docs/phase6_calibration.md) | Calibration method detail, AUC analysis, feature weights |
-| [`docs/phase0_map.html`](docs/phase0_map.html) | Interactive folium map — all plots over imagery (open in browser, no server) |
+| [`docs/failure_gallery.html`](docs/failure_gallery.html) | All predictions colour-coded: green = high-conf corrected (≥ 0.75), orange = low-conf (0.5–0.75), red = flagged, cyan = example truths. Layer control per village. |
+| [`docs/phase0_map.html`](docs/phase0_map.html) | Phase 0 forensics — all plots over satellite imagery with drift vectors |
