@@ -29,6 +29,21 @@ Then build Phase 1 baseline ladder in `src/baseline_ladder.py`:
 
 ---
 
+## Gemini Collaboration Protocol
+
+After every significant step (phase complete, major decision, threshold locked, surprising finding):
+1. Generate a Gemini prompt and give it to the user unprompted.
+2. User pastes it into Gemini, pastes response back.
+3. Evaluate the response critically — agree only if reasoning is sound. Flag if wrong.
+
+**Prompt format:** Include current phase, specific decision/finding, relevant numbers, and ask for critique or validation. Be specific — paste data, not vague summaries.
+
+**What Gemini is good for:** Architecture critique, catching overfit/overengineering, second opinion on threshold choices, risk register updates.
+
+**What to push back on:** Suggestions to add complexity without evidence, changes that contradict locked decisions (§Locked Architecture Decisions), anything that reintroduces tuning to the 9 example truths.
+
+---
+
 ## What This Is
 
 Intern take-home for BhuMe AI (Bangalore, ₹1.5L, 3 mo). Land-plot boundary correction for Maharashtra cadastral maps — century-old sheets georeferenced with sparse control points → parcels drift off real fields. Task: decide which plots can be nudged to their true position and where. Graded on HOW YOU THINK, not score. AUC (confidence calibration) is most-weighted metric.
