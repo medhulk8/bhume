@@ -8,8 +8,7 @@ __pycache__/
 # Kit venv (managed by uv)
 kit/.venv/
 
-# Outputs (generated — commit when ready)
-data/*/predictions.geojson
+# Outputs (generated — predictions.geojson committed as submission deliverable)
 
 # Jupyter
 .ipynb_checkpoints/

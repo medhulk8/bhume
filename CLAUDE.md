@@ -12,10 +12,13 @@
 
 ## Current Status
 
-**Phase 6 calibration — COMPLETE (final 2-feature model). Phase 5 + predict.py next.**
-Phase 0/1/3/6 done. Phase 3: vadnerbhairav IoU 0.872; malatavadi IoU 0.678.
-Phase 6 (`docs/phase6_calibration.md`): FINAL 2-feature LR→isotonic on [agree_m, abs_log_area_ratio]. Honest cross-val AUC vadnerbhairav 0.721, malatavadi 0.804. Dropped gp_std (wrong sign) + p2sp (≈0 weight) per Gemini — AUC stable/up. agree_m dominant (−0.72 / −1.41).
-OPEN RISK (flagged in doc): malatavadi real-truth AUC inverted (n=3, statistically meaningless — trust 277-sample cross-val per Gemini).
+**predict.py complete — final predictions written for both villages.**
+Phases 0/1/3/6 done. predict.py = end-to-end pipeline (adjacency→Pass1→Pass2→calibration→decision).
+Two bugs fixed: (1) area ratio equatorial→UTM, (2) redundant physical cap in decision layer (was over-flagging small-plot villages).
+Vadnerbhairav: corrected=1942 (79%), flagged=513 (21%), omitted=2. IoU 0.872, synth AUC 0.721.
+Malatavadi: corrected=1970 (79%), flagged=432 (17%), omitted=106. IoU 0.678, synth AUC 0.804.
+Flag rate ~18-21% matches Phase 0 area census. README.md written.
+OPEN RISK: malatavadi real-truth Spearman inverted at n=3 — statistically near-meaningless, noted in docs.
 
 Session log → `sessions.md`
 GitHub: https://github.com/medhulk8/bhume (private)
@@ -26,13 +29,15 @@ GitHub: https://github.com/medhulk8/bhume (private)
 
 ```bash
 cd /Users/medhul/Desktop/projects/bhume/kit
-uv run python ../src/calibrate.py both   # regenerate calibrated predictions
+uv run python ../src/predict.py ../data/vadnerbhairav
+uv run python ../src/predict.py ../data/malatavadi
 ```
 Key next steps:
-1. Phase 5 decision layer: leave-alone threshold (shift <5m → keep official, safe under CONTROL_SHIFT_M=5.0), area-ratio flag band [0.7,1.4]. Fold into phase3_drift.py or new decide.py.
-2. Final `predict.py <village_dir>` single-entry wrapper → predictions.geojson (runs Phase 3 + calibration end-to-end).
-3. README: method diagram, ablation ladder, reliability diagrams, failure gallery (5-10 plots).
-4. 5-min video script from docs/journal.md.
+1. Verify malatavadi final scores (run in progress this session).
+2. Generate failure gallery HTML map with flagged + low-confidence plots highlighted.
+3. 5-min video script from docs/journal.md.
+4. Commit + push final predictions.geojson for both villages.
+5. Fill Google Form (repo URL + video + résumé).
 
 ---
 

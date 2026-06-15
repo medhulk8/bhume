@@ -13,7 +13,6 @@ Pipeline (one drift-field build, one imagery handle, windowed reads only):
   5. Decision layer:
        - shift < LEAVE_ALONE_M  → OMIT  (restraint: likely a control plot; no penalty/credit)
        - area ratio outside band → FLAG  (area mismatch — don't drag)
-       - block hit physical cap  → FLAG
        - greedy fails + GP uncertain → FLAG
        - else → CORRECTED, confidence = calibration model.
 
@@ -98,7 +97,6 @@ def predict(village_dir: str) -> gpd.GeoDataFrame:
     already: set[str] = set()
     pns_by_area = sorted(plots.index.tolist(), key=lambda pn: areas_m2.get(pn, 0), reverse=True)
     anchors: list[DF.Anchor] = []
-    block_of: dict[str, list[str]] = {}
     n = len(pns_by_area)
     for i, seed in enumerate(pns_by_area):
         if i % 400 == 0:
@@ -109,7 +107,6 @@ def predict(village_dir: str) -> gpd.GeoDataFrame:
         res = M.chamfer_block(block, plots, img_src, bnd, f_img, f_4326, img_crs)
         for pn in block:
             already.add(pn)
-            block_of[pn] = block
         if not res["is_flagged"] and res["p2sp_ratio"] < 0.85:
             merged = unary_union([plots_u.loc[pn, "geometry"] for pn in block if pn in plots_u.index])
             if merged and not merged.is_empty:
@@ -191,14 +188,6 @@ def predict(village_dir: str) -> gpd.GeoDataFrame:
             n_flag += 1
             rows.append({"plot_number": pn, "status": "flagged", "confidence": 0.0,
                          "geometry": geom, "method_note": f"area ratio {ar:.2f} outside band"})
-            continue
-
-        # Physical cap → flag
-        block = block_of.get(pn, [pn])
-        if sum(areas_m2.get(b, 0) for b in block) > M.PHYSICAL_CAP_FACTOR * median_area:
-            n_flag += 1
-            rows.append({"plot_number": pn, "status": "flagged", "confidence": 0.0,
-                         "geometry": geom, "method_note": "block hit physical cap"})
             continue
 
         # Corrected — apply shift, calibrated confidence
