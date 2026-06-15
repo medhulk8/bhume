@@ -269,22 +269,24 @@ def build_calibration_set(village_name: str, fields: list[DF.DriftField],
     return samples
 
 
-FEATURE_NAMES = ["p2sp", "agree_m", "gp_std", "abs_log_area_ratio"]
+FEATURE_NAMES = ["agree_m", "abs_log_area_ratio"]
 
 
 def _feature_vector(p2sp: float, agree_m: float, gp_std: float, area_ratio: float) -> list[float]:
     """Raw feature vector for the logistic regression. No hand-set weights.
 
+    Only agree_m + abs_log_area_ratio (Gemini ruling): gp_std had a wrong-sign
+    multicollinearity artifact (+0.54, coupled with agree_m); P2SP weight was ~0
+    (measures peak sharpness, not correctness). Dropping both improves generalization
+    on unseen villages. Signature keeps p2sp/gp_std for caller compatibility — ignored.
+
     abs(log(area_ratio)) is monotone: 0 at ratio=1 (good), larger = worse (either direction).
-    LR learns the sign/magnitude of every weight from the synthetic labels.
     """
     def _fin(v, default):
         return float(v) if (v is not None and np.isfinite(v)) else default
-    p2sp = _fin(p2sp, 1.0)
     agree_m = _fin(agree_m, 28.0)
-    gp_std = _fin(gp_std, 5.0)
     ar = max(_fin(area_ratio, 1.0), 1e-3)
-    return [p2sp, agree_m, gp_std, abs(float(np.log(ar)))]
+    return [agree_m, abs(float(np.log(ar)))]
 
 
 class CalibrationModel:
