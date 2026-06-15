@@ -6,10 +6,12 @@
 
 ## Current Status
 
-**Phase: 0 — COMPLETE. Phase 1 (baseline ladder) is next.**
-Env verified (uv, Python 3.12). Baseline runs (median IoU 0.713 on 6 truths).
-Phase 0 forensics complete — findings in `docs/phase0_findings.md`.
-Key findings: drift confirmed; ~81% plots placement-fixable; shared vertices viable; blockiness ~0.77.
+**Phase 3 — in progress (block-grow + GP drift field).**
+Phase 0 complete (`docs/phase0_findings.md`). Phase 1 complete (`docs/baseline_scores.md`).
+Phase 3 first run: vadnerbhairav 144s, 132 anchors, 1 sheet, 2302 corrected/155 flagged.
+Scores pending (scoring fix in progress). Malatavadi Phase 3 not yet run.
+
+Session log → `sessions.md`
 GitHub: https://github.com/medhulk8/bhume (private)
 
 ---
@@ -18,14 +20,12 @@ GitHub: https://github.com/medhulk8/bhume (private)
 
 ```bash
 cd /Users/medhul/Desktop/projects/bhume/kit
-uv run quickstart.py ../data/vadnerbhairav   # sanity check baseline still works
+uv run python ../src/phase3_drift.py both   # run Phase 3 on both villages, get scores
 ```
-Then build Phase 1 baseline ladder in `src/baseline_ladder.py`:
-1. Identity (move nothing) — restraint reference
-2. `global_median_shift()` — naive reference (already in kit)
-3. Greedy per-plot chamfer — later becomes ablation row
-
-**READ `docs/phase0_findings.md` FIRST** before any threshold decisions.
+Then:
+1. Run Phase 3 on malatavadi — verify drift field helps (target: IoU > 0.4)
+2. Build Phase 5 decision layer (`src/decide.py`): leave-alone threshold, flag conditions
+3. Build Phase 6 confidence calibration (`src/calibrate.py`): synthetic shift injection + isotonic regression
 
 ---
 
@@ -173,25 +173,4 @@ All from `kit/` — run with `uv run` from `kit/`.
 
 ---
 
-## Session Log
-
-### 2026-06-15 — Session 2
-- Installed uv (not on PATH initially). Ran `uv sync` in kit/. Added folium, scikit-learn, matplotlib, opencv-python-headless.
-- Verified baseline: vadnerbhairav median IoU=0.713 vs official=0.612 (improvement +0.112).
-- Ran full Phase 0 forensics (`src/phase0_forensics.py`). All 7 sub-tasks complete.
-- Key Phase 0 numbers (see `docs/phase0_findings.md` for full detail):
-  - Drift vectors: vadnerbhairav mean shift (-5.2m, +12.2m), malatavadi (+8.1m, +1.3m). Different directions per village → multi-sheet or two independent control-point sets. Max magnitude 18.6m → search radius 28m.
-  - Angular spread 71° combined (across both villages), but WITHIN vadnerbhairav spatially close plots show 6–29° spread. Villages drift in different directions — not one global field.
-  - Area-ratio: 80.3% vadnerbhairav / 82.0% malatavadi plots in [0.7, 1.4] → placement-fixable. ~20% flaggable for area mismatch.
-  - Signal audit: edge strength decreases with plot size (tiny=104, large=68). Malatavadi tiny=81, small=74 — weaker but not zero. Signal exists everywhere, just weaker on small plots.
-  - boundaries.tif: uint8 0–255, ~4% pixels non-zero (sparse). Hot fraction near truth boundaries only ~9% → edges present but coarse; supplement, don't rely on alone.
-  - Shared vertices: 25% (vadnerbhairav) and 31% (malatavadi) vertices shared across plots → topology trick VIABLE.
-  - Blockiness: 0.77 score in both villages → plot numbers cluster spatially → sheet seam detection viable.
-- Built folium HTML map (`docs/phase0_map.html`) with official plots + example truths overlaid on satellite.
-- Committed and pushed all outputs.
-
-### 2026-06-15 — Session 1
-- Created GitHub repo (private): https://github.com/medhulk8/bhume
-- Read all kit modules (io.py, geo.py, score.py, baseline.py, CONTRACT.md, README.md)
-- Created CLAUDE.md (this file)
-- No implementation code written. Env not yet verified. Phase 0 not started.
+## Session Log → `sessions.md`
