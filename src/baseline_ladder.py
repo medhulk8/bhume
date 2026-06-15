@@ -127,38 +127,52 @@ def build_distance_transform(evidence: np.ndarray, edge_threshold: float = 0.15)
     return dt.astype(np.float32)
 
 
-def sample_outline_on_dt(dt: np.ndarray, transform, geom_img_crs,
-                          dx_m: float, dy_m: float) -> float:
-    """Sample precomputed distance transform at outline pixels of shifted geometry.
+def outline_pixel_coords(geom_img_crs, transform, H: int, W: int) -> tuple[np.ndarray, np.ndarray]:
+    """Extract outline pixel coordinates for a geometry ONCE.
 
-    Returns trimmed-mean DT distance (LOWER = better alignment).
-    Out-of-bounds pixels get penalised with dt.max() (worst possible distance).
+    Returns (rows, cols) integer arrays of pixels along the polygon boundary.
+    These are the base coordinates; each candidate shift adds a fixed (drow, dcol) offset
+    and samples the DT — no rasterize needed in the inner loop.
     """
     import rasterio.features
-    from shapely.affinity import translate as shp_translate
-
-    shifted = shp_translate(geom_img_crs, xoff=dx_m, yoff=dy_m)
-    H, W = dt.shape
-    penalty = float(dt.max()) if dt.max() > 0 else float(H + W)
-
     try:
         burned = rasterio.features.rasterize(
-            [(mapping(shifted), 1)],
+            [(mapping(geom_img_crs), 1)],
             out_shape=(H, W), transform=transform, fill=0, dtype=np.uint8
         )
         kernel = np.ones((3, 3), np.uint8)
         eroded = cv2.erode(burned, kernel, iterations=1)
-        outline_mask = (burned - eroded).astype(bool)
+        outline = burned - eroded
+        rows, cols = np.where(outline > 0)
+        return rows.astype(np.int32), cols.astype(np.int32)
     except Exception:
+        return np.array([], dtype=np.int32), np.array([], dtype=np.int32)
+
+
+def score_shift_on_dt(dt: np.ndarray, base_rows: np.ndarray, base_cols: np.ndarray,
+                       drow: int, dcol: int) -> float:
+    """Score one candidate shift (drow, dcol in pixels) against precomputed DT.
+
+    Shifts base outline coordinates by (drow, dcol), clips out-of-bounds to penalty,
+    samples DT, returns trimmed-mean distance. LOWER = better. O(M) array ops only.
+    """
+    H, W = dt.shape
+    penalty = float(dt.max()) if dt.max() > 0 else float(H + W)
+
+    if len(base_rows) < 5:
         return penalty
 
-    if outline_mask.sum() < 5:
-        return penalty
+    rows = base_rows + drow
+    cols = base_cols + dcol
 
-    distances = dt[outline_mask]
-    # Trim top 10% (furthest pixels — one occluded edge can't sink a good match)
+    in_bounds = (rows >= 0) & (rows < H) & (cols >= 0) & (cols < W)
+    distances = np.full(len(rows), penalty, dtype=np.float32)
+    if in_bounds.sum() >= 5:
+        distances[in_bounds] = dt[rows[in_bounds], cols[in_bounds]]
+
+    # Trim top 10% (furthest pixels — one bad edge can't sink a good match)
     k = max(1, int(0.10 * len(distances)))
-    trimmed = np.sort(distances)[:-k] if k < len(distances) else distances
+    trimmed = np.sort(distances)[:-k]
     return float(np.mean(trimmed))
 
 
@@ -225,18 +239,32 @@ def greedy_chamfer_predict(village, confidence_floor: float = 0.3) -> gpd.GeoDat
                 preds.append(_flagged(pn, row, "no imagery overlap"))
                 continue
 
-            # Compute DT once per patch — all candidates sample from this
+            # Compute DT once per patch
             dt = build_distance_transform(evidence)
             dt_max = float(dt.max()) if dt.max() > 0 else float(sum(evidence.shape))
+            H_dt, W_dt = dt.shape
 
             if dt_max < 1e-6:
                 preds.append(_flagged(pn, row, "no edges detected in patch"))
                 continue
 
-            # Coarse search — lower DT score = better
+            # Extract outline pixels ONCE — inner loop does only array indexing
+            base_rows, base_cols = outline_pixel_coords(geom_img, win_transform, H_dt, W_dt)
+            if len(base_rows) < 5:
+                preds.append(_flagged(pn, row, "outline too small to rasterise"))
+                continue
+
+            # Pixel size from win_transform (affine: scale_x is col width in metres)
+            px_w = abs(win_transform.a)   # metres per pixel (x)
+            px_h = abs(win_transform.e)   # metres per pixel (y)
+
+            # Coarse search: convert metre shifts to pixel offsets
+            grid_dcol = (grid_dx / px_w).astype(np.int32)
+            grid_drow = (-grid_dy / px_h).astype(np.int32)  # y-axis flipped in image
+
             scores = np.array([
-                sample_outline_on_dt(dt, win_transform, geom_img, dx, dy)
-                for dx, dy in zip(grid_dx, grid_dy)
+                score_shift_on_dt(dt, base_rows, base_cols, drow, dcol)
+                for drow, dcol in zip(grid_drow, grid_dcol)
             ])
 
             if np.min(scores) >= dt_max * 0.99:
@@ -246,19 +274,18 @@ def greedy_chamfer_predict(village, confidence_floor: float = 0.3) -> gpd.GeoDat
             best_idx = int(np.argmin(scores))
             best_dx, best_dy = grid_dx[best_idx], grid_dy[best_idx]
 
-            # Fine search around coarse best
+            # Fine search: ±FINE_RADIUS_M at FINE_STEP_M resolution
             fine_steps = np.arange(-FINE_RADIUS_M, FINE_RADIUS_M + FINE_STEP_M, FINE_STEP_M)
-            fine_dx_grid, fine_dy_grid = np.meshgrid(
-                best_dx + fine_steps, best_dy + fine_steps
-            )
-            fine_dx = fine_dx_grid.ravel()
-            fine_dy = fine_dy_grid.ravel()
+            fine_dx_g, fine_dy_g = np.meshgrid(best_dx + fine_steps, best_dy + fine_steps)
+            fine_dx = fine_dx_g.ravel(); fine_dy = fine_dy_g.ravel()
             in_fine = np.sqrt((fine_dx - best_dx)**2 + (fine_dy - best_dy)**2) <= FINE_RADIUS_M
             fine_dx, fine_dy = fine_dx[in_fine], fine_dy[in_fine]
+            fine_dcol = (fine_dx / px_w).astype(np.int32)
+            fine_drow = (-fine_dy / px_h).astype(np.int32)
 
             fine_scores = np.array([
-                sample_outline_on_dt(dt, win_transform, geom_img, dx, dy)
-                for dx, dy in zip(fine_dx, fine_dy)
+                score_shift_on_dt(dt, base_rows, base_cols, drow, dcol)
+                for drow, dcol in zip(fine_drow, fine_dcol)
             ])
             best_fine_idx = int(np.argmin(fine_scores))
             final_dx = fine_dx[best_fine_idx]
