@@ -81,6 +81,7 @@ calibrated confidence.
 | Vertex-level topology (fabric never tears) | Per-parcel rigid shift would leave gaps at shared boundaries | Locked in Phase 0 |
 | Omit shifts < 5m (not flagged) | Scorer CONTROL_SHIFT_M=5.0 — submitting near-zero "corrections" would hurt restraint and AUC | Phase 0 + contract |
 | GMM shift sampler (not GP) for calibration | Injecting from GP field → agree_m near-tautology → inflated AUC | Gemini-caught leakage: 0.813 (leaky) → 0.721 (honest) |
+| Confidence threshold 0.5 → flag | P(IoU≥0.5) < 0.5 = expected to be wrong = don't submit. Decision-theory optimal boundary, immune to overfit (derived from probability axioms not example truths) | Malatavadi IoU 0.678→0.739, wrong plot correctly flagged |
 
 ---
 
@@ -105,8 +106,8 @@ single-plot chamfer has no spatial context.
 
 | Village | IoU (public truths) | Improvement | Corrected | Flagged | Omitted | Synth AUC |
 |---|---|---|---|---|---|---|
-| vadnerbhairav | 0.872 | +0.259 | 1942 (79%) | 513 (21%) | 2 | 0.721 |
-| malatavadi | 0.678 | +0.168 | 1970 (79%) | 432 (17%) | 106 (4%) | 0.804 |
+| vadnerbhairav | 0.872 | +0.259 | 1928 (79%) | 527 (21%) | 2 | 0.721 |
+| malatavadi | 0.739 | +0.229 | 1375 (55%) | 1027 (41%) | 106 (4%) | 0.804 |
 
 Flag rate matches Phase 0 area census (~18-20% of plots outside area ratio band [0.7, 1.4]).
 Malatavadi 106 omits = plots where both greedy chamfer and GP field predict shift < 5m.

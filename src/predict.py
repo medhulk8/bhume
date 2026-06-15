@@ -197,12 +197,22 @@ def predict(village_dir: str) -> gpd.GeoDataFrame:
                          "geometry": geom, "method_note": f"area ratio {ar:.2f} outside band"})
             continue
 
-        # Corrected — apply shift, calibrated confidence
-        corrected = _translate_geom(geom, dx_m, dy_m, utm_crs)
+        # Calibrated confidence
         if model is not None:
             conf = model.predict(p2sp, agree_m, gp_std, ar)
         else:
             conf = float(np.clip(1.0 - p2sp, 0.05, 0.95))
+
+        # Decision-theory threshold: P(IoU≥0.5) < 0.5 → expected to be wrong → flag
+        if conf < 0.5:
+            n_flag += 1
+            rows.append({"plot_number": pn, "status": "flagged", "confidence": 0.0,
+                         "geometry": geom,
+                         "method_note": f"calibrated P(success)={conf:.3f} < 0.5"})
+            continue
+
+        # Corrected — apply shift
+        corrected = _translate_geom(geom, dx_m, dy_m, utm_crs)
         n_corr += 1
         rows.append({"plot_number": pn, "status": "corrected", "confidence": round(conf, 4),
                      "geometry": corrected,
