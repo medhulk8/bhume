@@ -1,35 +1,40 @@
 # BhuMe Take-Home — Decision Log & Video Script
 
-## Core insight (30s)
+## Screen recording plan
 
-Century-old cadastral sheets were georeferenced with sparse control points. The error is not
-random per-plot — it's a smooth spatially-coherent drift field. Neighbours drift together.
-That's the thesis. The 9 example truths validate it on day one: shift vectors cluster by
-direction, max 18.6m, within-village angular spread only 6-29°.
-
-The consequence: estimating the FIELD, not greedy per-plot matches, is the right architecture.
+- `docs/phase0_map.html` in browser → show plots over imagery for drift thesis (visual proof)
+- BhuMe Test page with vadnerbhairav loaded → live polygon overlays (before/after)
+- Terminal: run predict.py for 30s, show it processing, skip to results
+- `docs/reliability_vadnerbhairav.png` during calibration section
 
 ---
 
-## Two-pass architecture — why it exists (60s)
+## (30s) Data-driven foundation — Phase 0
 
-Phase 1 greedy chamfer: vadnerbhairav IoU 0.912. Malatavadi: 0.030. Catastrophic on dense
-small parcels — the chamfer snaps to neighbouring plot boundaries.
+Don't skip the forensics. Audited `boundaries.tif` — 90% sparse under canopy / in village
+cores. Greedy matching alone fails because there's nothing to match against. Also tested
+`boundaries.tif` reliability on 30 plots per regime — only trustworthy on open fields.
 
-First attempt at Phase 3: single-pass block chamfer → anchors → per-plot correction.
-Vadnerbhairav REGRESSED to 0.744. Root cause: block DT is a merged distance transform.
-Merged DT has flatter peaks than single-plot DT → inflated P2SP → low confidence everywhere.
-
-Fix: **two-pass**. Pass 1 = block chamfer for anchors only (don't use block result as
-per-plot correction). Pass 2 = greedy per-plot chamfer for corrections. The block matches
-are used purely to build the GP drift field. Per-plot confidence comes from greedy.
-
-Result: vadnerbhairav 0.744→0.872. Malatavadi 0.030→0.678. The drift field is load-bearing
-for dense villages.
+Drift thesis validated on day one: 9 example truth shift vectors cluster by direction,
+max 18.6m, within-village angular spread 6-29°. This is not random noise — it's a smooth
+spatially-coherent field. **The architecture was born from data, not assumptions.**
 
 ---
 
-## Confidence calibration — the whole story (90s)
+## (60s) The drift field architecture — "torn cloth"
+
+Cadastral sheets are physically separate pieces of paper, georeferenced independently.
+The drift field has genuine discontinuities at sheet seams. We detect seams (anchor-
+discordance graph cut + LOO model-selection brake), then fit per-sheet affine + GP on residuals.
+
+**Why the field saves Malatavadi:** greedy chamfer on 872 m² plots → snaps to neighbouring
+bund → IoU 0.030. Block-grow + GP field gives each plot spatial context from its neighbours.
+Malatavadi: 0.030 → 0.739. The two-pass combines precision of greedy (sharp single-plot peaks)
+with stability of the field (spatial prior). Neither alone is sufficient.
+
+---
+
+## (90s) The confidence engine — crown jewel
 
 **What doesn't work: P2SP**
 First attempt: use Lowe's peak ratio as confidence. AUC 0.490. P2SP measures sharpness
