@@ -12,9 +12,9 @@
 
 ## Current Status
 
-**Phase 3 — COMPLETE. Phase 5 (decide.py) + Phase 6 (calibrate.py) next.**
-Phase 0 complete (`docs/phase0_findings.md`). Phase 1 complete (`docs/baseline_scores.md`).
-Phase 3 scores (`docs/phase3_scores.md`): vadnerbhairav IoU 0.872 / Spearman +0.829; malatavadi IoU 0.678 (+0.648 vs Phase 1 0.030). Two-pass: block chamfer anchors + greedy per-plot correction + GP fallback.
+**Phase 6 calibration — COMPLETE. Phase 5 decision layer + final predict.py next.**
+Phase 0/1/3/6 complete. Phase 3: vadnerbhairav IoU 0.872 / Spearman +0.829; malatavadi IoU 0.678.
+Phase 6 (`docs/phase6_calibration.md`): chamfer-GP agreement signal fixed AUC. Synthetic AUC vadnerbhairav 0.813, malatavadi 0.730 (P2SP-only was 0.490). Confidence = isotonic(0.40·(1-P2SP) + 0.45·(1-agree/28m) + 0.15·(1-GPstd/5m)). Calibrated predictions written for both villages.
 
 Session log → `sessions.md`
 GitHub: https://github.com/medhulk8/bhume (private)
@@ -25,13 +25,13 @@ GitHub: https://github.com/medhulk8/bhume (private)
 
 ```bash
 cd /Users/medhul/Desktop/projects/bhume/kit
-uv run python ../src/phase5_decide.py both     # Phase 5: leave-alone + flag conditions
-uv run python ../src/phase6_calibrate.py both  # Phase 6: synthetic calibration → isotonic
+uv run python ../src/calibrate.py both   # regenerate calibrated predictions
 ```
 Key next steps:
-1. Phase 5 `src/phase5_decide.py`: leave-alone threshold (<5m shift), flag conditions (area ratio, tiny plots)
-2. Phase 6 `src/phase6_calibrate.py`: inject synthetic shifts → isotonic regression on P2SP/GP-std → P(IoU>0.5)
-3. Final `predict.py <village_dir>` wrapper for submission
+1. Phase 5 decision layer: leave-alone threshold (shift <5m → keep official, safe under CONTROL_SHIFT_M=5.0), area-ratio flag band [0.7,1.4]. Fold into phase3_drift.py or new decide.py.
+2. Final `predict.py <village_dir>` single-entry wrapper → predictions.geojson (runs Phase 3 + calibration end-to-end).
+3. README: method diagram, ablation ladder, reliability diagrams, failure gallery (5-10 plots).
+4. 5-min video script from docs/journal.md.
 
 ---
 

@@ -8,6 +8,9 @@
 - Gemini approved block anchors, 0.040 regression, and Phase 6 plan. Directive: synthetic shifts must sample from GP field, not uniform scatter.
 - CLAUDE.md update protocol strengthened: update after every significant step, not just session end.
 - sessions.md = log only; CLAUDE.md = living status (no session entries there).
+- Phase 6 first run: AUC 0.490 (P2SP alone fails — predicts sharpness not correctness). Diagnosed: false chamfer peaks have low P2SP but wrong location.
+- Fix: added chamfer-GP agreement signal (agree_m). AUC 0.490 → 0.813 on vadnerbhairav. Spearman on 6 truths 0.765.
+- Phase 6 complete both villages: synth AUC vadnerbhairav 0.813, malatavadi 0.730. Calibrated predictions written. Doc: docs/phase6_calibration.md.
 
 ### 2026-06-15 — Session 2
 - Installed uv (not on PATH initially). Ran `uv sync` in kit/. Added folium, scikit-learn, matplotlib, opencv-python-headless.
