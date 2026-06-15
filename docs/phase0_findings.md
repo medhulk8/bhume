@@ -109,4 +109,57 @@ Charts:
 
 ---
 
+## Evidence Budget Formula (locked post-Gemini review, pre-Phase 3)
+
+**Pixel-level evidence** (absolute, no regime scaling):
+```
+evidence_px = max(sobel_norm(px),  0.9 × boundaries_norm(px))
+```
+- `sobel_norm` = Sobel magnitude normalised to [0,1] within patch
+- `boundaries_norm` = boundaries.tif value / 255
+- γ = 0.9 (not 1.0): small discount on boundaries.tif when both fire at full strength — it's coarser resolution than Sobel
+- Max fusion (not linear sum): lets either signal dominate when confident; prevents linear sum suppressing high-precision boundaries.tif hits
+
+**Plot budget:**
+```
+budget(plot) = mean(evidence_px along perimeter) × perimeter_length_m
+```
+
+**Regime weights apply to solo_threshold only** (not to pixel evidence — avoids double-penalising large plots):
+```
+solo_threshold(plot) = BASE_THRESHOLD × regime_density_factor(plot)
+```
+Regime density factors (tiny needs higher density before solo match trusted):
+- tiny (<500m²): 1.3
+- small (500–3k): 1.1
+- medium (3k–15k): 1.0
+- large (>15k): 0.85
+
+**BASE_THRESHOLD**: Set in Phase 3 by inspecting chamfer landscape sharpness on the 9 public example truths. The 9 truths *validate* the threshold; they do not calibrate it (min of 9 values dominated by hardest case). Set at knee of peak-to-background ratio distribution from those 9 plots.
+
+**Confidence metric:** Lowe's peak-to-second-peak ratio (NOT z-score).
+```
+ratio = best_dt_score / second_best_dt_score   (outside P2SP_EXCLUSION_M = 5m radius)
+confidence = clip(1.0 - ratio, 0, 1)
+```
+Z-score rejected: inflates confidence on multi-modal landscapes (parallel bunds → 3 peaks, z-score still high, AUC wrecked). P2SP directly encodes ambiguity.
+
+**Score metric:** True chamfer distance transform (NOT trimmed-mean of evidence pixels).
+```
+dt = cv2.distanceTransform(1 - binarised_evidence, DIST_L2)   # once per patch
+score(dx, dy) = trimmed_mean(dt sampled at shifted outline pixels)   # O(M) lookup
+```
+Trimmed-mean on evidence rejected: outline must land exactly on 1–2 pixel edge → near-zero except at exact match → flat spiky landscape, brittle search. DT creates smooth basin of attraction, guides coarse-to-fine correctly.
+
+Out-of-bounds handling: pixels shifted outside patch → assigned `dt.max()` penalty (conservative, no signal available there).
+
+**Corrections absorbed from whiteboard review:**
+- Rejected: linear weighted sum (0.3 × boundaries_norm) — suppresses high-confidence hits
+- Rejected: regime weights on pixel evidence — double-penalises large plots with naturally lower Sobel
+- Rejected: 25th percentile of Phase 1 "successful" plots — survivorship bias (spatial luck ≠ visual signal)
+- Rejected: z-score confidence — multi-modal landscape trap (parallel bunds)
+- Rejected: trimmed-mean of evidence pixels as score — spiky brittle landscape, misses DT basin
+
+---
+
 _All thresholds here are cited by Phase 3 (matching), Phase 4 (drift field), and Phase 5 (decision layer)._
