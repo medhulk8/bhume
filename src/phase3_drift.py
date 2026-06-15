@@ -190,12 +190,19 @@ def run_village(village_name: str, em_iter: int = 0) -> gpd.GeoDataFrame:
         greedy = greedy_results.get(pn)
         greedy_ok = (greedy is not None and not greedy["is_flagged"])
 
+        # Get GP field prediction for this plot (for agreement signal)
+        gp_dx_pred, gp_dy_pred, gp_std_pred = (0.0, 0.0, GP_SIGMA_SCALE_M)
+        if fields:
+            gp_dx_pred, gp_dy_pred, gp_std_pred = DF.assign_sheet(cx_m, cy_m, fields).predict(cx_m, cy_m)
+
         if greedy_ok and greedy["p2sp_ratio"] < GREEDY_TRUST_P2SP:
             # High-confidence greedy chamfer → use directly
             dx_m = greedy["dx_m"]
             dy_m = greedy["dy_m"]
             p2sp = greedy["p2sp_ratio"]
             corrected_4326 = _translate_geom(geom_4326, dx_m, dy_m, utm_crs)
+            # Agreement: chamfer vs GP field (low disagreement = more trustworthy)
+            agree_m = float(np.sqrt((dx_m - gp_dx_pred)**2 + (dy_m - gp_dy_pred)**2))
             chamfer_conf = float(np.clip(1.0 - p2sp, 0.0, 1.0))
             shift_m = float(np.sqrt(dx_m**2 + dy_m**2))
             if shift_m < 1.0:
@@ -205,7 +212,7 @@ def run_village(village_name: str, em_iter: int = 0) -> gpd.GeoDataFrame:
                 "plot_number": pn, "status": "corrected",
                 "confidence": round(chamfer_conf, 4),
                 "geometry": corrected_4326,
-                "method_note": f"greedy-chamfer dx={dx_m:.1f}m dy={dy_m:.1f}m p2sp={p2sp:.3f}",
+                "method_note": f"greedy-chamfer dx={dx_m:.1f}m dy={dy_m:.1f}m p2sp={p2sp:.3f} agree={agree_m:.1f}m gp_std={gp_std_pred:.1f}m",
             })
 
         elif fields:

@@ -107,7 +107,11 @@ def build_calibration_set(village_name: str, fields: list[DF.DriftField],
                            utm_crs: str, rng_seed: int = 42) -> list[dict]:
     """Generate synthetic calibration samples by injecting GP-coherent shifts.
 
-    Returns list of dicts: {p2sp, gp_std, shift_m, area_ratio, regime, iou, accurate}.
+    Key signal: chamfer-GP agreement (agree_m = |chamfer_shift - gp_field|).
+    High agreement → chamfer found the correct shift (same as GP field prediction).
+    Low agreement → chamfer found a false strong peak at a different location.
+
+    Returns list of dicts: {p2sp, gp_std, agree_m, shift_m, area_ratio, regime, iou, accurate}.
     """
     import rasterio
     rng = np.random.default_rng(rng_seed)
@@ -180,26 +184,27 @@ def build_calibration_set(village_name: str, fields: list[DF.DriftField],
                                   f_img, f_4326, img_crs)
 
         if result["is_flagged"]:
-            # Chamfer failed → this is a true negative (low accuracy, low confidence)
             samples.append({
-                "p2sp": 1.0, "gp_std": gp_std, "shift_m": inj_mag,
-                "area_ratio": 1.0, "regime": regime,
+                "p2sp": 1.0, "gp_std": gp_std, "agree_m": M.SEARCH_RADIUS_M,
+                "shift_m": inj_mag, "area_ratio": 1.0, "regime": regime,
                 "iou": 0.0, "accurate": False,
             })
             continue
 
-        # Apply chamfer result to geom_4326
+        # Chamfer-GP agreement: key signal for false-peak detection
+        agree_m = float(np.sqrt((result["dx_m"] - gp_dx)**2 + (result["dy_m"] - gp_dy)**2))
+
         chamfer_corrected = _translate(geom_4326, result["dx_m"], result["dy_m"], utm_crs)
         iou_val = _iou(chamfer_corrected, truth_4326)
         accurate = iou_val >= 0.5
 
-        # Area ratio (use rough drawn/recorded ratio)
         plot_row = plots.loc[pn]
         ar = _area_ratio(plot_row)
 
         samples.append({
             "p2sp":       result["p2sp_ratio"],
             "gp_std":     gp_std,
+            "agree_m":    agree_m,
             "shift_m":    inj_mag,
             "area_ratio": float(np.clip(ar, 0.3, 3.0)),
             "regime":     regime,
@@ -212,18 +217,23 @@ def build_calibration_set(village_name: str, fields: list[DF.DriftField],
     return samples
 
 
-def _raw_score(p2sp: float, gp_std: float, shift_m: float,
-               gp_sigma_scale: float = 5.0) -> float:
-    """Monotone raw score before isotonic calibration.
+def _raw_score(p2sp: float, gp_std: float, agree_m: float, shift_m: float,
+               gp_sigma_scale: float = 5.0,
+               search_radius: float = 28.0) -> float:
+    """Monotone raw score before isotonic calibration. Higher = more likely accurate.
 
-    Higher = more likely accurate.
-    - 1 - p2sp: low P2SP → sharp chamfer peak → high conf
-    - 1 - gp_std/scale: low GP uncertainty → high conf
-    Weight P2SP more (it's the primary signal from Phase 1 validation).
+    Signals (all mapped to [0,1], high = good):
+    - p2sp_signal: 1 - P2SP. Low P2SP = sharp chamfer peak = likely found something real.
+    - agree_signal: 1 - agree_m/search_radius. Chamfer agrees with GP field = correct shift.
+    - gp_signal: 1 - gp_std/scale. GP is confident = field well-anchored here.
+
+    agree_signal is primary: P2SP alone can't detect false peaks (high confidence wrong answer).
+    A chamfer that agrees with the GP field is almost certainly correct.
     """
-    chamfer_signal = float(np.clip(1.0 - p2sp, 0.0, 1.0))
-    gp_signal = float(np.clip(1.0 - gp_std / gp_sigma_scale, 0.0, 1.0))
-    return 0.7 * chamfer_signal + 0.3 * gp_signal
+    p2sp_signal  = float(np.clip(1.0 - p2sp, 0.0, 1.0))
+    agree_signal = float(np.clip(1.0 - agree_m / search_radius, 0.0, 1.0))
+    gp_signal    = float(np.clip(1.0 - gp_std / gp_sigma_scale, 0.0, 1.0))
+    return 0.4 * p2sp_signal + 0.45 * agree_signal + 0.15 * gp_signal
 
 
 def fit_isotonic(samples: list[dict], gp_sigma_scale: float = 5.0) -> IsotonicRegression:
@@ -231,7 +241,7 @@ def fit_isotonic(samples: list[dict], gp_sigma_scale: float = 5.0) -> IsotonicRe
 
     Monotone increasing: higher raw score → higher calibrated confidence.
     """
-    X = np.array([_raw_score(s["p2sp"], s["gp_std"], s["shift_m"], gp_sigma_scale)
+    X = np.array([_raw_score(s["p2sp"], s["gp_std"], s.get("agree_m", 28.0), s["shift_m"], gp_sigma_scale)
                   for s in samples])
     y = np.array([float(s["accurate"]) for s in samples])
     iso = IsotonicRegression(increasing=True, out_of_bounds="clip")
@@ -239,11 +249,11 @@ def fit_isotonic(samples: list[dict], gp_sigma_scale: float = 5.0) -> IsotonicRe
     return iso
 
 
-def apply_calibration(p2sp: float, gp_std: float, shift_m: float,
+def apply_calibration(p2sp: float, gp_std: float, agree_m: float, shift_m: float,
                        iso: IsotonicRegression,
                        gp_sigma_scale: float = 5.0) -> float:
     """Map raw signals → calibrated P(IoU >= 0.5)."""
-    score = _raw_score(p2sp, gp_std, shift_m, gp_sigma_scale)
+    score = _raw_score(p2sp, gp_std, agree_m, shift_m, gp_sigma_scale)
     prob = float(iso.predict([score])[0])
     return float(np.clip(prob, 0.01, 0.99))
 
@@ -258,28 +268,29 @@ def recalibrate_predictions(village_name: str, iso: IsotonicRegression,
         if row["status"] != "corrected":
             return row["confidence"]
         note = str(row.get("method_note", ""))
-        # Parse p2sp from method_note
         p2sp = 1.0
         if "p2sp=" in note:
-            try:
-                p2sp = float(note.split("p2sp=")[1].split()[0])
-            except Exception:
-                pass
-        gp_std = gp_sigma_scale  # default when not available
-        if "std=" in note:
-            try:
-                gp_std = float(note.split("std=")[1].split("m")[0])
-            except Exception:
-                pass
+            try: p2sp = float(note.split("p2sp=")[1].split()[0])
+            except Exception: pass
+        gp_std = gp_sigma_scale
+        if "gp_std=" in note:
+            try: gp_std = float(note.split("gp_std=")[1].split("m")[0])
+            except Exception: pass
+        elif "std=" in note:
+            try: gp_std = float(note.split("std=")[1].split("m")[0])
+            except Exception: pass
+        agree_m = 28.0  # default: worst case (no agreement info)
+        if "agree=" in note:
+            try: agree_m = float(note.split("agree=")[1].split("m")[0])
+            except Exception: pass
         shift_m = 5.0
         if "dx=" in note:
             try:
                 dx = float(note.split("dx=")[1].split("m")[0])
                 dy = float(note.split("dy=")[1].split("m")[0])
                 shift_m = float(np.sqrt(dx**2 + dy**2))
-            except Exception:
-                pass
-        return apply_calibration(p2sp, gp_std, shift_m, iso, gp_sigma_scale)
+            except Exception: pass
+        return apply_calibration(p2sp, gp_std, agree_m, shift_m, iso, gp_sigma_scale)
 
     gdf["confidence"] = gdf.apply(_recalibrate_row, axis=1)
     return gdf
@@ -295,10 +306,10 @@ def reliability_diagram(samples: list[dict], iso: IsotonicRegression,
     except ImportError:
         return
 
-    scores = np.array([_raw_score(s["p2sp"], s["gp_std"], s["shift_m"], gp_sigma_scale)
+    scores = np.array([_raw_score(s["p2sp"], s["gp_std"], s.get("agree_m", 28.0), s["shift_m"], gp_sigma_scale)
                        for s in samples])
     labels = np.array([float(s["accurate"]) for s in samples])
-    calibrated = np.array([apply_calibration(s["p2sp"], s["gp_std"], s["shift_m"],
+    calibrated = np.array([apply_calibration(s["p2sp"], s["gp_std"], s.get("agree_m", 28.0), s["shift_m"],
                                               iso, gp_sigma_scale) for s in samples])
 
     n_bins = 10
@@ -380,11 +391,11 @@ def run_calibration(village_name: str):
 
     # Quick AUC estimate on synthetic set
     from sklearn.metrics import roc_auc_score
-    scores = np.array([_raw_score(s["p2sp"], s["gp_std"], s["shift_m"]) for s in samples])
+    scores = np.array([_raw_score(s["p2sp"], s["gp_std"], s.get("agree_m", 28.0), s["shift_m"]) for s in samples])
     labels = np.array([float(s["accurate"]) for s in samples])
     if len(np.unique(labels)) == 2:
         auc = roc_auc_score(labels, scores)
-        print(f"  Synthetic AUC (raw score): {auc:.3f}")
+        print(f"  Synthetic AUC (raw score with agreement): {auc:.3f}")
 
     # Save calibration model
     cal_path = DOCS_ROOT / f"calibration_{village_name}.pkl"
