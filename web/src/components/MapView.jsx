@@ -104,7 +104,9 @@ export default function MapView({ village, meta, filter, showOriginal, selected,
       filter: ["==", ["get", "plot_number"], selected.plot_number],
     });
     if (data.length) {
-      src.setData({ type: "FeatureCollection", features: data });
+      // querySourceFeatures returns one shard per tile — take only the first
+      // to avoid multiple overlapping white outlines on repeated clicks.
+      src.setData({ type: "FeatureCollection", features: [data[0]] });
       const b = new maplibregl.LngLatBounds();
       eachCoord(data[0].geometry.coordinates, ([lng, lat]) => b.extend([lng, lat]));
       if (!b.isEmpty()) m.fitBounds(b, { padding: 160, maxZoom: 19, duration: 600 });
