@@ -4,8 +4,6 @@
 
 **[→ Live Boundary Review Console](https://bhume-review-console.pages.dev)** — click any parcel to inspect its correction, signals, and calibrated confidence.
 
-![Boundary Review Console demo](docs/console_demo.gif)
-
 ---
 
 ## Results
