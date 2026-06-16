@@ -46,6 +46,12 @@ CLAUDE.md
 PLAN.md
 sessions.md
 
+# Web app — generated/large artifacts (source committed, generated excluded)
+web/node_modules/
+web/dist/
+web/public/tiles/      # 168 MB baked XYZ tiles — on Cloudflare CDN, regen with bake_tiles.py
+web/public/data/       # generated from predictions.geojson — regen with build_web_data.py
+
 # Scratch
 scratch/
 *.log

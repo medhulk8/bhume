@@ -2,6 +2,8 @@
 
 > Correcting century-old drifted land parcel boundaries in Maharashtra using imagery evidence and a spatially-coherent GP drift field.
 
+**[→ Live Boundary Review Console](https://bhume-review-console.pages.dev)** — click any parcel to inspect its correction, signals, and calibrated confidence.
+
 ---
 
 ## Results
