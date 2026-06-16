@@ -29,6 +29,25 @@ Writes `<village_dir>/predictions.geojson`. Runtime ~6 min/village on a laptop.
 
 ---
 
+## Boundary Review Console
+
+**Live:** [bhume-review-console.pages.dev](https://bhume-review-console.pages.dev)
+
+A deployed human-in-the-loop inspection tool — the next step in the pipeline where flagged plots route to surveyors. Built in React + MapLibre GL JS.
+
+**Basemap:** `imagery.tif` converted to 1,581 static XYZ PNG tiles (z13–z17 vadnerbhairav at 1.19 m/px native, z13–z18 malatavadi at 0.60 m/px native) using rasterio + Pillow — no generic Mapbox layer. The reviewer sees the exact pixel grid the chamfer matcher optimized against. MapLibre overzooms the deepest real tile client-side for close inspection.
+
+**Features:**
+- Parcels colored by outcome: green (conf ≥ 0.75) / amber (0.5–0.75) / red (flagged), fill opacity = confidence
+- Click any parcel → inspector: calibrated confidence gauge with the 0.5 flag threshold marked, source (greedy / GP field), shift vector, agree_m, area ratio, plain-language decision path
+- Before/after toggle — official position as dashed blue outline above corrected fill
+- Status filter + confidence slider
+- Metrics modal: ablation ladder, cross-val AUC, reliability diagrams
+
+**Architecture:** fully static, deployed to Cloudflare Pages (no live backend, no cold starts). `src/bake_tiles.py` bakes tiles; `src/build_web_data.py` parses `method_note` into structured GeoJSON for the frontend. `predictions.geojson` untouched.
+
+---
+
 ## The problem
 
 Maharashtra cadastral sheets are century-old hand-drawn maps georeferenced with sparse control points. Plots drift off their real field boundaries by 5–30 m — but the drift is **spatially coherent**: neighbouring plots drift together because they were registered with the same control points.
@@ -188,3 +207,6 @@ Plots with shift < 5 m are **omitted** (no penalty, no credit). This protects re
 | [`docs/phase6_calibration.md`](docs/phase6_calibration.md) | Calibration method detail, AUC analysis, feature weights |
 | [`docs/failure_gallery.html`](docs/failure_gallery.html) | All predictions colour-coded: green = high-conf corrected (≥ 0.75), orange = low-conf (0.5–0.75), red = flagged, cyan = example truths. Layer control per village. |
 | [`docs/phase0_map.html`](docs/phase0_map.html) | Phase 0 forensics — all plots over satellite imagery with drift vectors |
+| [`src/bake_tiles.py`](src/bake_tiles.py) | Converts imagery.tif → static XYZ PNG tiles for the web console (rasterio + Pillow) |
+| [`src/build_web_data.py`](src/build_web_data.py) | Builds frontend GeoJSON from predictions — parses signals, extracts original geometry |
+| [`web/src/`](web/src/) | React + MapLibre console source (App, MapView, Inspector, Sidebar, MetricsModal) |
