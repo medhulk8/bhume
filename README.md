@@ -4,6 +4,8 @@
 
 **[→ Live Boundary Review Console](https://bhume-review-console.pages.dev)** — click any parcel to inspect its correction, signals, and calibrated confidence.
 
+![Boundary Review Console demo](docs/console_demo.gif)
+
 ---
 
 ## Results
@@ -175,6 +177,18 @@ Known limitation: malatavadi synth AUC 0.804 vs real Spearman −0.866. With n=3
 | Low evidence | Canopy-covered plots | Sobel + boundaries.tif both weak under forest cover → flat DT → low P2SP |
 | Sheet-seam blocks | Plots straddling two cadastral sheets | Anchor-discordance at seam → high gp_std → GP fallback or flag |
 | Sub-pixel plots | Malatavadi pot-kharaba fragments (< 400 m²) | Plot smaller than imagery resolution; chamfer unreliable |
+
+---
+
+## What I'd build next at BhuMe
+
+The console is a prototype of the production human-in-the-loop loop. Three engineering directions from here:
+
+**1. District-scale drift fields with an active-learning flywheel.** Flagged plots route to surveyors through the console. Every accepted correction becomes a new control-point anchor, feeding back into the GP drift field for that sheet. Each human fix improves confidence for its 20–50 spatial neighbours — a data flywheel where the hardest cases are tackled first and the field gets sharper over time without re-running the full pipeline.
+
+**2. Multi-sheet, district-wide generalization.** The current pipeline adapts per-village (search radius, block cap, GP length-scale all derived from data). Scaling to all Maharashtra villages means federating drift fields across sheet seams using shared road/canal control anchors, and routing structurally-different villages (urban vs. agrarian vs. forest-edge) through regime-specific calibration branches — same pipeline, different priors.
+
+**3. Temporal change detection.** Run the same boundary-evidence map on multi-date imagery (e.g. Sentinel-2 annual composites). Plots where the corrected boundary no longer aligns with current imagery are encroachment candidates — a direct feed into BhuMe's land-ownership verification layer beyond static correction.
 
 ---
 
